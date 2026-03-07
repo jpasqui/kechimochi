@@ -3,8 +3,16 @@ import { Library } from './components/library';
 import { getAllMedia, addLog, importCsv, switchProfile, wipeProfile, deleteProfile, addMedia, updateMedia, listProfiles, exportCsv } from './api';
 import { customPrompt, customConfirm, showExportCsvModal, customAlert, buildCalendar } from './modals';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
+const appWindow = getCurrentWindow();
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Window Controls
+  document.getElementById('win-min')?.addEventListener('click', () => appWindow.minimize());
+  document.getElementById('win-max')?.addEventListener('click', () => appWindow.toggleMaximize());
+  document.getElementById('win-close')?.addEventListener('click', () => appWindow.close());
+
   const viewContainer = document.getElementById('view-container')!;
   
   const dashboard = new Dashboard(viewContainer);

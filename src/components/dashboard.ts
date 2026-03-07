@@ -29,14 +29,16 @@ export class Dashboard {
              </div>
           </div>
 
-          <div class="card" style="min-width: 0;">
-            <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 1rem; gap: 1rem;">
+          <div class="card" style="display: flex; flex-direction: column; min-width: 0;">
+            <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 2rem; gap: 1rem;">
               <button class="btn btn-ghost" style="padding: 0.2rem 0.5rem;" id="btn-heatmap-prev">&lt;</button>
-              <h3 style="margin: 0;">Tracking Heatmap (<span id="heatmap-year-label">${this.currentHeatmapYear}</span>)</h3>
+              <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-secondary);">Tracking Heatmap (<span id="heatmap-year-label">${this.currentHeatmapYear}</span>)</h3>
               <button class="btn btn-ghost" style="padding: 0.2rem 0.5rem;" id="btn-heatmap-next">&gt;</button>
             </div>
-            <div id="heatmap-container" style="display: flex; justify-content: center; overflow-x: auto; padding-bottom: 1rem;">
-              <!-- Generated heatmap cells -->
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+              <div id="heatmap-container" style="width: 100%; display: flex; justify-content: center;">
+                <!-- Generated heatmap cells -->
+              </div>
             </div>
           </div>
         </div>
@@ -165,10 +167,21 @@ export class Dashboard {
     const uniqueDates = Array.from(new Set(logs.map(l => l.date))).sort();
     let maxStreak = 0;
     let currentStreak = 0;
+    let sinceDate = 'N/A';
+    if (uniqueDates.length > 0) sinceDate = uniqueDates[0];
 
     for (const log of logs) {
         mediaBreakdown.set(log.media_type, (mediaBreakdown.get(log.media_type) || 0) + log.duration_minutes);
     }
+    
+    // Total immersion average
+    let totalMins = 0;
+    mediaBreakdown.forEach(v => totalMins += v);
+    const loggedDaysCount = uniqueDates.length || 1;
+    const totalAvgMins = totalMins / loggedDaysCount;
+    const totalAvgH = Math.floor(totalAvgMins / 60);
+    const totalAvgM = Math.round(totalAvgMins % 60);
+    const totalAvgFormat = totalAvgH > 0 ? `${totalAvgH}h ${totalAvgM}m` : `${totalAvgM}m`;
 
     if (uniqueDates.length > 0) {
         let streakCount = 1;
@@ -219,40 +232,59 @@ export class Dashboard {
     for (const [mtype, mins] of sortedBreakdown) {
        let h = Math.floor(mins / 60);
        let m = Math.round(mins % 60);
-       let format = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+       let totalFormat = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+       
+       const avgMins = mins / loggedDaysCount;
+       const avgH = Math.floor(avgMins / 60);
+       const avgM = Math.round(avgMins % 60);
+       const avgFormat = avgH > 0 ? `${avgH}h ${avgM}m` : `${avgM}m`;
+
        actTypeHtml += `
-          <div style="display: flex; justify-content: space-between;">
-             <span style="color: var(--text-secondary);">${mtype}</span>
-             <span style="font-weight: bold; color: var(--text-primary);">${format}</span>
+          <div style="display: flex; flex-direction: column; gap: 0.2rem; background: rgba(255,255,255,0.03); padding: 0.4rem; border-radius: var(--radius-sm);">
+             <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                <span style="color: var(--text-secondary);">${mtype}</span>
+                <span style="font-weight: bold; color: var(--text-primary);">${totalFormat}</span>
+             </div>
+             <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.8;">
+                <span>Daily Avg:</span>
+                <span>${avgFormat}</span>
+             </div>
           </div>
        `;
     }
 
     container.innerHTML = `
-      <h3 style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 1.1rem;">Study Stats</h3>
-      <div style="display: flex; flex-direction: column; gap: 1rem; flex: 1;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; width: 100%; text-align: center;">
-          <div style="background: var(--bg-dark); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-primary);">${totalLogs}</div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary);">logs</div>
+      <div style="text-align: center; margin-bottom: 1rem;">
+          <h3 style="color: var(--text-secondary); font-size: 1.1rem; margin: 0;">Study Stats</h3>
+          <div style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7; margin-top: 0.2rem;">Since: ${sinceDate}</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0.75rem; flex: 1;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; width: 100%; text-align: center;">
+          <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${totalLogs}</div>
+            <div style="font-size: 0.65rem; color: var(--text-secondary);">logs</div>
           </div>
-          <div style="background: var(--bg-dark); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-primary);">${totalMedia}</div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary);">media items</div>
+          <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${totalMedia}</div>
+            <div style="font-size: 0.65rem; color: var(--text-secondary);">media items</div>
           </div>
-          <div style="background: var(--bg-dark); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-primary);">${maxStreak}</div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary);">max streak</div>
+          <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${maxStreak}</div>
+            <div style="font-size: 0.65rem; color: var(--text-secondary);">max streak</div>
           </div>
-          <div style="background: var(--bg-dark); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-primary);">${currentStreak}</div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary);">day streak</div>
+          <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${currentStreak}</div>
+            <div style="font-size: 0.65rem; color: var(--text-secondary);">day streak</div>
           </div>
         </div>
         
-        <div style="width: 100%; height: 1px; background: var(--border-color); margin: 0.5rem 0;"></div>
+        <div style="background: var(--accent-purple); padding: 0.5rem; border-radius: var(--radius-sm); text-align: center; color: var(--bg-dark); font-weight: 600; font-size: 0.85rem;">
+            Total Avg: ${totalAvgFormat} / day
+        </div>
         
-        <div style="width: 100%; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+        <div style="width: 100%; height: 1px; background: var(--border-color); margin: 0.2rem 0;"></div>
+        
+        <div style="width: 100%; display: flex; flex-direction: column; gap: 0.4rem;">
            ${actTypeHtml}
         </div>
       </div>

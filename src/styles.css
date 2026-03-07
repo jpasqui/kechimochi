@@ -142,7 +142,51 @@ a {
   height: 100vh;
 }
 
-.topbar {
+.title-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  height: 32px;
+  background-color: #1a151f; /* Darker title bar */
+  user-select: none;
+}
+
+.title-bar .logo {
+  flex-shrink: 0;
+}
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  z-index: 10;
+}
+
+.win-btn {
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.win-btn:hover {
+  background-color: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.win-btn-close:hover {
+  background-color: #ff4757 !important;
+  color: #fff !important;
+}
+
+.app-nav-bar {
   display: flex;
   align-items: center;
   padding: 0 1.5rem;
@@ -172,7 +216,7 @@ a {
 .nav-link.active::after {
   content: '';
   position: absolute;
-  bottom: -20px;
+  bottom: -15px;
   left: 0;
   width: 100%;
   height: 2px;
@@ -257,20 +301,25 @@ input:focus, select:focus {
 
 /* Heatmap Grid */
 .heatmap {
-  display:flex;
-  gap: 4px;
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
 }
 .heatmap-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
 }
 
 .heatmap-cell {
-  width: 12px;
-  height: 12px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 2px;
   background-color: #3b3b4a;
+  min-width: 0;
 }
 .heatmap-cell[data-level="1"] { background-color: #725b80; }
 .heatmap-cell[data-level="2"] { background-color: #957dad; }

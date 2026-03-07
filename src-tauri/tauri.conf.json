@@ -13,9 +13,12 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "ケチモチ",
-        "width": 1024,
-        "height": 768
+        "width": 1280,
+        "height": 900,
+        "decorations": false,
+        "transparent": true
       }
     ],
     "security": {

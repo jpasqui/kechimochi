@@ -9,16 +9,34 @@
   <body>
     <div id="app">
       <!-- Topbar -->
-      <header class="topbar">
-        <div class="logo" style="display: flex; align-items: center; gap: 0.5rem;">
-          <img src="/logo.png" style="height: 48px; width: 48px;" alt="Logo" />
-          <h2 style="margin: 0;">ケチモチ</h2>
+      <!-- Title Bar -->
+      <div class="title-bar">
+        <div class="logo" data-tauri-drag-region style="display: flex; align-items: center; gap: 0.5rem; flex: 1; height: 100%;">
+          <img src="/logo.png" style="height: 20px; width: 20px;" alt="Logo" />
+          <h1 style="margin: 0; font-size: 0.85rem; font-weight: 500;">ケチモチ</h1>
         </div>
+        <div class="window-controls">
+           <button class="win-btn" id="win-min" title="Minimize">
+              <svg width="10" height="10" viewBox="0 0 12 12"><rect fill="currentColor" x="1" y="5" width="10" height="1.5"/></svg>
+           </button>
+           <button class="win-btn" id="win-max" title="Maximize">
+              <svg width="10" height="10" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1.2" x="2" y="2" width="8" height="8"/></svg>
+           </button>
+           <button class="win-btn win-btn-close" id="win-close" title="Close">
+              <svg width="10" height="10" viewBox="0 0 12 12"><path fill="currentColor" d="M10.5,2.5,9.5,1.5,6,5,2.5,1.5,1.5,2.5,5,6,1.5,9.5,2.5,10.5,6,7,9.5,10.5,10.5,9.5,7,6Z"/></svg>
+           </button>
+        </div>
+      </div>
+
+      <!-- Navigation Bar -->
+      <header class="app-nav-bar">
         <nav class="topbar-nav" id="main-nav">
           <a class="nav-link active" data-view="dashboard">Dashboard</a>
           <a class="nav-link" data-view="library">Library</a>
         </nav>
+        
         <div style="flex: 1"></div>
+        
         <div style="display: flex; gap: 0.75rem; align-items: center;">
           <div style="display: flex; gap: 0.5rem;">
              <button class="btn btn-ghost" id="btn-import-csv" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Import CSV</button>
