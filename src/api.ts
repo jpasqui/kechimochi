@@ -1,0 +1,86 @@
+import { invoke } from '@tauri-apps/api/core';
+
+export interface Media {
+  id?: number;
+  title: string;
+  media_type: string;
+  status: string;
+  language: string;
+}
+
+export interface ActivityLog {
+  id?: number;
+  media_id: number;
+  duration_minutes: number;
+  date: string;
+}
+
+export interface ActivitySummary {
+  id: number;
+  media_id: number;
+  title: string;
+  media_type: string;
+  duration_minutes: number;
+  date: string;
+}
+
+export interface DailyHeatmap {
+  date: string;
+  total_minutes: number;
+}
+
+export async function getAllMedia(): Promise<Media[]> {
+  return await invoke('get_all_media');
+}
+
+export async function addMedia(media: Media): Promise<number> {
+  return await invoke('add_media', { media });
+}
+
+export async function updateMedia(media: Media): Promise<void> {
+  return await invoke('update_media', { media });
+}
+
+export async function deleteMedia(id: number): Promise<void> {
+  return await invoke('delete_media', { id });
+}
+
+export async function addLog(log: ActivityLog): Promise<number> {
+  return await invoke('add_log', { log });
+}
+
+export async function deleteLog(id: number): Promise<void> {
+  return await invoke('delete_log', { id });
+}
+
+export async function getLogs(): Promise<ActivitySummary[]> {
+  return await invoke('get_logs');
+}
+
+export async function getHeatmap(): Promise<DailyHeatmap[]> {
+  return await invoke('get_heatmap');
+}
+
+export async function importCsv(filePath: string): Promise<number> {
+  return await invoke('import_csv', { filePath });
+}
+
+export async function switchProfile(profileName: string): Promise<void> {
+  return await invoke('switch_profile', { profileName });
+}
+
+export async function wipeProfile(profileName: string): Promise<void> {
+  return await invoke('wipe_profile', { profileName });
+}
+
+export async function deleteProfile(profileName: string): Promise<void> {
+  return await invoke('delete_profile', { profileName });
+}
+
+export async function listProfiles(): Promise<string[]> {
+  return await invoke('list_profiles');
+}
+
+export async function exportCsv(filePath: string, startDate?: string, endDate?: string): Promise<number> {
+  return await invoke('export_csv', { filePath, startDate, endDate });
+}
