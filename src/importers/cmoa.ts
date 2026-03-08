@@ -2,9 +2,11 @@ import { MetadataImporter, ScrapedMetadata } from './index';
 import { invoke } from '@tauri-apps/api/core';
 
 export class CmoaImporter implements MetadataImporter {
+    name = "Cmoa";
+    supportedContentTypes = ["Reading", "Manga"];
     matchUrl(url: string, contentType: string): boolean {
         // We only allow Cmoa urls. They can be for Reading/Manga
-        return (contentType === "Reading" || contentType === "Manga") && url.includes("cmoa.jp/title/");
+        return this.supportedContentTypes.includes(contentType) && url.includes("cmoa.jp/");
     }
 
     async fetch(url: string): Promise<ScrapedMetadata> {

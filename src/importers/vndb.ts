@@ -2,8 +2,10 @@ import { ScrapedMetadata, MetadataImporter } from './index';
 import { invoke } from '@tauri-apps/api/core';
 
 export class VndbImporter implements MetadataImporter {
+    name = "VNDB";
+    supportedContentTypes = ["Visual Novel"];
     matchUrl(url: string, contentType: string): boolean {
-        if (contentType !== "Visual Novel") return false;
+        if (!this.supportedContentTypes.includes(contentType)) return false;
         try {
             const u = new URL(url);
             return u.hostname === "vndb.org" && u.pathname.startsWith("/v") && !isNaN(parseInt(u.pathname.substring(2)));

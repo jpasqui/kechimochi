@@ -6,6 +6,8 @@ export interface ScrapedMetadata {
 }
 
 export interface MetadataImporter {
+    name: string;
+    supportedContentTypes: string[];
     matchUrl(url: string, contentType: string): boolean;
     fetch(url: string, targetVolume?: number): Promise<ScrapedMetadata>;
 }
@@ -38,4 +40,12 @@ export async function fetchMetadataForUrl(url: string, contentType: string, targ
 
 export function isValidImporterUrl(url: string, contentType: string): boolean {
     return importers.some(i => i.matchUrl(url, contentType));
+}
+
+export function getImportersForContentType(contentType: string): MetadataImporter[] {
+    return importers.filter(i => i.supportedContentTypes.includes(contentType));
+}
+
+export function getAvailableSourcesForContentType(contentType: string): string[] {
+    return getImportersForContentType(contentType).map(i => i.name);
 }

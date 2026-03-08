@@ -2,8 +2,10 @@ import { MetadataImporter, ScrapedMetadata } from './index';
 import { invoke } from '@tauri-apps/api/core';
 
 export class BookwalkerImporter implements MetadataImporter {
+    name = "Bookwalker";
+    supportedContentTypes = ["Reading", "Manga"];
     matchUrl(url: string, contentType: string): boolean {
-        return (contentType === "Reading" || contentType === "Manga") && url.includes("bookwalker.jp/");
+        return this.supportedContentTypes.includes(contentType) && url.includes("bookwalker.jp/");
     }
 
     async fetch(url: string, targetVolume?: number): Promise<ScrapedMetadata> {

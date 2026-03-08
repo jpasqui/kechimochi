@@ -2,8 +2,11 @@ import { MetadataImporter, ScrapedMetadata } from './index';
 import { invoke } from '@tauri-apps/api/core';
 
 export class AnilistImporter implements MetadataImporter {
+    name = "Anilist";
+    supportedContentTypes = ["Anime"];
     matchUrl(url: string, contentType: string): boolean {
-        return (contentType === "Watching" || contentType === "Anime") && url.includes("anilist.co/anime/");
+        if (!this.supportedContentTypes.includes(contentType)) return false;
+        return url.includes("anilist.co/anime/");
     }
 
     async fetch(url: string): Promise<ScrapedMetadata> {

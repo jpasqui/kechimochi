@@ -2,9 +2,11 @@ import { MetadataImporter, ScrapedMetadata } from './index';
 import { invoke } from '@tauri-apps/api/core';
 
 export class BookmeterImporter implements MetadataImporter {
+    name = "Bookmeter";
+    supportedContentTypes = ["Novel"];
     matchUrl(url: string, contentType: string): boolean {
         // We only allow Bookmeter urls for Novel
-        return contentType === "Novel" && url.includes("bookmeter.com/books/");
+        return this.supportedContentTypes.includes(contentType) && url.includes("bookmeter.com/books/");
     }
 
     async fetch(url: string): Promise<ScrapedMetadata> {

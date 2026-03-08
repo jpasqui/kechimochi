@@ -2,7 +2,7 @@ import { getAllMedia, getLogsForMedia, updateMedia, uploadCoverImage, readFileBy
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { customPrompt, showImportMergeModal, customAlert } from '../modals';
-import { fetchMetadataForUrl, isValidImporterUrl } from '../importers';
+import { fetchMetadataForUrl, isValidImporterUrl, getAvailableSourcesForContentType } from '../importers';
 
 export class MediaView {
   private container: HTMLElement;
@@ -288,7 +288,9 @@ export class MediaView {
             
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button class="btn btn-ghost" id="btn-add-extra" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">+ Add Extra Field</button>
+                ${getAvailableSourcesForContentType(media.content_type || "Unknown").length > 0 ? `
                 <button class="btn btn-ghost" id="btn-import-meta" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; color: var(--accent-purple);">Fetch Metadata from URL</button>
+                ` : ''}
                 <button class="btn btn-ghost" id="btn-clear-meta" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; color: var(--accent-red);">Clear Metadata</button>
             </div>
             
@@ -567,7 +569,9 @@ export class MediaView {
 
       // Import Metadata
       document.getElementById('btn-import-meta')?.addEventListener('click', async () => {
-          let url = await customPrompt(`Enter a valid URL for ${media.content_type} metadata:`);
+          const sources = getAvailableSourcesForContentType(media.content_type || "Unknown");
+          const sourceMsg = sources.length > 0 ? `Available sites for this media type: ${sources.join(", ")}.` : "";
+          let url = await customPrompt("Enter the URL of the source of metadata", "", sourceMsg);
           if (!url || url.trim() === "") return;
           await this.performMetadataImport(media, url.trim(), false);
       });

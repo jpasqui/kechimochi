@@ -2,8 +2,10 @@ import { ScrapedMetadata, MetadataImporter } from './index';
 import { invoke } from '@tauri-apps/api/core';
 
 export class ImdbImporter implements MetadataImporter {
+    name = "IMDB";
+    supportedContentTypes = ["Anime", "Movie", "Live Action", "Drama"];
     matchUrl(url: string, contentType: string): boolean {
-        if (contentType !== "Movie") return false;
+        if (!this.supportedContentTypes.includes(contentType)) return false;
 
         try {
             const u = new URL(url);
