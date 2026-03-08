@@ -13,11 +13,13 @@ export interface MetadataImporter {
 import { VndbImporter } from './vndb';
 import { BackloggdImporter } from './backloggd';
 import { ImdbImporter } from './imdb';
+import { AnilistImporter } from './anilist';
 
 export const importers: MetadataImporter[] = [
     new VndbImporter(),
     new BackloggdImporter(),
-    new ImdbImporter()
+    new ImdbImporter(),
+    new AnilistImporter()
 ];
 
 export async function fetchMetadataForUrl(url: string, contentType: string): Promise<ScrapedMetadata | null> {
