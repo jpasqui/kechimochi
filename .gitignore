@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 *.csv
+/e2e/logs/
 
 # Editor directories and files
 .vscode/*

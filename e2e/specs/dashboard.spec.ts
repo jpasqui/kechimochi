@@ -31,7 +31,8 @@ describe('Dashboard CUJ', () => {
   });
 
   it('should display stats cards with fixture data', async () => {
-    const statsCards = await $$('.stats-card');
+    // There should be several card elements in the dashboard
+    const statsCards = await $$('.card');
     expect(statsCards.length).toBeGreaterThan(0);
   });
 

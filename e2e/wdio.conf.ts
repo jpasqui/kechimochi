@@ -10,6 +10,10 @@ import { prepareTestDir, cleanupTestDir } from './helpers/setup.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
+// Unique ID for this test run
+const RUN_ID = process.env.TEST_RUN_ID || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+const LOGS_DIR = path.join(__dirname, 'logs', `test_run_${RUN_ID}`);
+
 let tauriDriver: ChildProcess;
 let tauriDriverExit = false;
 
@@ -87,7 +91,7 @@ export const config: WebdriverIO.Config = {
     ['visual', {
       baselineFolder: path.join(__dirname, 'screenshots', 'baseline'),
       formatImageName: '{tag}',
-      screenshotPath: path.join(__dirname, 'screenshots', 'actual'),
+      screenshotPath: path.join(LOGS_DIR, 'visual', 'actual'),
       savePerInstance: false,
       autoSaveBaseline: true,
       blockOutStatusBar: false,
@@ -97,7 +101,7 @@ export const config: WebdriverIO.Config = {
     // OCR text recognition
     ['ocr', {
       contrast: 0.25,
-      imagesFolder: path.join(__dirname, 'screenshots', 'ocr'),
+      imagesFolder: path.join(LOGS_DIR, 'ocr'),
     }],
   ],
 
@@ -109,7 +113,14 @@ export const config: WebdriverIO.Config = {
    * Prepare the isolated test data directory before any session starts.
    */
   onPrepare: async () => {
+    // Ensure logs directory exists
+    const { mkdirSync } = await import('fs');
+    mkdirSync(LOGS_DIR, { recursive: true });
+    process.env.TEST_RUN_ID = RUN_ID;
+
     const testDir = prepareTestDir();
+    console.log(`[e2e] Test run ID: ${RUN_ID}`);
+    console.log(`[e2e] Logs directory: ${LOGS_DIR}`);
     console.log(`[e2e] Test data directory: ${testDir}`);
     // Set on the parent process -- inherited by workers
     process.env.KECHIMOCHI_DATA_DIR = testDir;
@@ -166,7 +177,7 @@ export const config: WebdriverIO.Config = {
   afterTest: async (test, _context, { passed }) => {
     if (!passed) {
       const sanitizedTitle = (test.title || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
-      const failDir = path.join(__dirname, 'screenshots', 'failures');
+      const failDir = path.join(LOGS_DIR, 'failures');
       const { mkdirSync } = await import('fs');
       mkdirSync(failDir, { recursive: true });
       await browser.saveScreenshot(path.join(failDir, `${sanitizedTitle}.png`));

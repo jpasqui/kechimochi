@@ -26,6 +26,8 @@ interface ProfileState {
 }
 
 export class ProfileView extends Component<ProfileState> {
+    private isRefreshing = false;
+
     constructor(container: HTMLElement) {
         super(container, {
             currentProfile: localStorage.getItem('kechimochi_profile') || 'default',
@@ -67,8 +69,14 @@ export class ProfileView extends Component<ProfileState> {
     }
 
     async render() {
-        if (this.state.report.timestamp === '') {
-            await this.loadData();
+        if (!this.isRefreshing && this.state.report.timestamp === '') {
+            this.isRefreshing = true;
+            try {
+                await this.loadData();
+            } finally {
+                this.isRefreshing = false;
+            }
+            return;
         }
 
         this.clear();
@@ -83,7 +91,7 @@ export class ProfileView extends Component<ProfileState> {
                 </div>
 
                 <!-- Reading Report Card -->
-                <div class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="card" id="profile-report-card" style="display: flex; flex-direction: column; gap: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="margin: 0;">Reading Report Card</h3>
                         <button class="btn btn-primary" id="profile-btn-calculate-report" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">Calculate Report</button>

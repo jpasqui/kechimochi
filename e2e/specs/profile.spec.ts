@@ -27,7 +27,7 @@ describe('Profile CUJ', () => {
   });
 
   it('should display the theme selector', async () => {
-    const themeSelect = await $('select');
+    const themeSelect = await $('#profile-select-theme');
     // There should be at least one select element for theme
     if (await themeSelect.isExisting()) {
       expect(await themeSelect.isDisplayed()).toBe(true);
@@ -36,7 +36,7 @@ describe('Profile CUJ', () => {
 
   it('should display reading speed report card', async () => {
     // Look for elements related to the reading speed report
-    const reportSection = await $('.report-card');
+    const reportSection = await $('#profile-report-card');
     if (await reportSection.isExisting()) {
       expect(await reportSection.isDisplayed()).toBe(true);
     }

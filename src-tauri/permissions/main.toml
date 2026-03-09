@@ -1,0 +1,32 @@
+[[permission]]
+identifier = "all-app-commands"
+description = "Allows all custom application commands."
+commands.allow = [
+    "get_all_media",
+    "add_media",
+    "update_media",
+    "delete_media",
+    "add_log",
+    "delete_log",
+    "get_logs",
+    "get_heatmap",
+    "import_csv",
+    "export_csv",
+    "export_media_csv",
+    "analyze_media_csv",
+    "apply_media_import",
+    "switch_profile",
+    "clear_activities",
+    "wipe_everything",
+    "delete_profile",
+    "list_profiles",
+    "get_logs_for_media",
+    "upload_cover_image",
+    "read_file_bytes",
+    "fetch_remote_bytes",
+    "fetch_external_json",
+    "download_and_save_image",
+    "get_username",
+    "set_setting",
+    "get_setting"
+]
