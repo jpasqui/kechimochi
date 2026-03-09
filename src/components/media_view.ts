@@ -108,9 +108,15 @@ export class MediaView {
             const matchesQuery = media.title.toLowerCase().includes(this.gridSearchQuery.toLowerCase());
             const displayStyle = (matchesQuery && typeMatch) ? 'display: flex;' : 'display: none;';
 
+            const contentType = media.content_type || 'Unknown';
+            const badgeHtml = (contentType !== 'Unknown' && contentType.trim() !== '')
+                ? `<div class="grid-item-type-badge">${contentType}</div>`
+                : '';
+
             return `
-              <div class="media-grid-item" data-index="${index}" data-type="${media.content_type || 'Unknown'}" title="${media.title}" style="cursor: pointer; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-dark); border: 1px solid var(--border-color); flex-direction: column; height: 100%; ${displayStyle}">
+              <div class="media-grid-item" data-index="${index}" data-type="${media.content_type || 'Unknown'}" title="${media.title}" style="cursor: pointer; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-dark); border: 1px solid var(--border-color); flex-direction: column; height: 100%; position: relative; ${displayStyle}">
                   ${imageContent}
+                  ${badgeHtml}
               </div>
           `;
         });
