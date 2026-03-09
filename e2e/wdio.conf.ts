@@ -18,12 +18,6 @@ if (process.env.TEST_RUN_ID) {
 }
 
 let tauriDriver: ChildProcess;
-let tauriDriverExit = false;
-
-function closeTauriDriver() {
-  tauriDriverExit = true;
-  tauriDriver?.kill();
-}
 
 // Ensure tauri-driver is closed even on unexpected exits
 function onShutdown(fn: () => void) {
@@ -35,7 +29,7 @@ function onShutdown(fn: () => void) {
   process.on('SIGTERM', cleanup);
 }
 
-onShutdown(() => { closeTauriDriver(); });
+onShutdown(() => { tauriDriver?.kill(); });
 
 export const config: WebdriverIO.Config = {
   // ==================
@@ -60,7 +54,7 @@ export const config: WebdriverIO.Config = {
   // ==================
   // Capabilities
   // ==================
-  maxInstances: 1,
+  maxInstances: parseInt(process.env.E2E_MAX_INSTANCES || '2'),
   capabilities: [{
     maxInstances: 1,
     'tauri:options': {
@@ -131,24 +125,33 @@ export const config: WebdriverIO.Config = {
     mkdirSync(LOGS_DIR, { recursive: true });
     process.env.TEST_RUN_ID = STABLE_RUN_ID;
 
-    const testDir = prepareTestDir();
     console.log(`[e2e] Test run ID: ${STABLE_RUN_ID}`);
     console.log(`[e2e] Logs directory: ${LOGS_DIR}`);
-    console.log(`[e2e] Test data directory: ${testDir}`);
-    // Set on the parent process -- inherited by workers
-    process.env.KECHIMOCHI_DATA_DIR = testDir;
   },
 
   /**
    * Spawn tauri-driver right before each WebDriver session.
    * This is the correct hook per the official Tauri docs.
    */
-  beforeSession: async (_config: any, _capabilities: any, specs: string[]) => {
-    const testDir = process.env.KECHIMOCHI_DATA_DIR;
+  beforeSession: async (config: any, caps: any, specs: string[]) => {
     const specFile = specs[0];
     const specName = path.basename(specFile, '.spec.ts');
+    
+    // 1. Isolated Data Directory for this session
+    const testDir = prepareTestDir();
+    process.env.KECHIMOCHI_DATA_DIR = testDir;
 
-    // 1. Create a transient staging directory in /tmp
+    // 2. Dynamic Port Assignment (offset by worker ID)
+    // WDIO_WORKER_ID looks like "0-0", "0-1", etc.
+    const workerIndex = parseInt(process.env.WDIO_WORKER_ID?.split('-')[1] || '0');
+    const tauriDriverPort = 4444 + workerIndex;
+    const nativeDriverPort = 5555 + workerIndex;
+    
+    // Update capability port so WDIO connects to the correct driver
+    config.port = tauriDriverPort;
+    caps.port = tauriDriverPort;
+
+    // 3. Create a transient staging directory in /tmp
     const STAGE_DIR = path.join(os.tmpdir(), `kechimochi-e2e-${Math.random().toString(36).slice(2)}`);
     const { mkdirSync, appendFileSync, existsSync } = await import('fs');
     mkdirSync(STAGE_DIR, { recursive: true });
@@ -156,15 +159,17 @@ export const config: WebdriverIO.Config = {
     process.env.SPEC_STAGE_DIR = STAGE_DIR;
     process.env.SPEC_NAME = specName;
 
-    // 2. Proactively create the requested subfolders
+    // 4. Proactively create the requested subfolders
     mkdirSync(path.join(STAGE_DIR, 'visual', 'actual'), { recursive: true });
     mkdirSync(path.join(STAGE_DIR, 'visual', 'diff'), { recursive: true });
     mkdirSync(path.join(STAGE_DIR, 'ocr'), { recursive: true });
 
     const logFile = path.join(STAGE_DIR, 'tauri-driver.log');
     appendFileSync(logFile, `[e2e] [${specName}] Session Started at ${new Date().toISOString()}\n`);
+    appendFileSync(logFile, `[e2e] [${specName}] Worker ID: ${process.env.WDIO_WORKER_ID}\n`);
     appendFileSync(logFile, `[e2e] [${specName}] Staging Dir: ${STAGE_DIR}\n`);
-    appendFileSync(logFile, `[e2e] [${specName}] Data Dir: ${testDir}\n\n`);
+    appendFileSync(logFile, `[e2e] [${specName}] Data Dir: ${testDir}\n`);
+    appendFileSync(logFile, `[e2e] [${specName}] Driver Port: ${tauriDriverPort}\n\n`);
 
     // Helper to log safely even if stageDir disappears during move
     const log = (msg: string | Buffer) => {
@@ -173,13 +178,16 @@ export const config: WebdriverIO.Config = {
       }
     };
 
-    console.log(`\n[e2e] [${specName}] Staging area: ${STAGE_DIR}`);
-    console.log(`[e2e] [${specName}] Final destination: ${path.join(LOGS_DIR, specName)}`);
+    console.log(`\n[e2e] [${specName}] Worker ${process.env.WDIO_WORKER_ID} starting...`);
+    console.log(`[e2e] [${specName}] Port: ${tauriDriverPort}, Data: ${testDir}`);
 
-    // 2. Spawn driver
+    // 5. Spawn driver
     tauriDriver = spawn(
       'tauri-driver',
-      [],
+      [
+        '--port', tauriDriverPort.toString(),
+        '--native-port', nativeDriverPort.toString()
+      ],
       {
         stdio: [null, 'pipe', 'pipe'],
         env: {
@@ -219,7 +227,6 @@ export const config: WebdriverIO.Config = {
     // 1. Signal driver to stop
     if (tauriDriver) {
       const { appendFileSync } = await import('fs');
-      tauriDriverExit = true;
       tauriDriver.kill('SIGTERM');
 
       // 2. WAIT for it to actually die before moving files
@@ -259,6 +266,13 @@ export const config: WebdriverIO.Config = {
         }
       }
     }
+
+    // 3. Clean up the isolated data directory
+    const testDir = process.env.KECHIMOCHI_DATA_DIR;
+    if (testDir && specName) {
+      cleanupTestDir(testDir);
+      console.log(`[e2e] [${specName}] Cleaned up isolated data directory: ${testDir}`);
+    }
   },
 
   /**
@@ -281,10 +295,6 @@ export const config: WebdriverIO.Config = {
    * Clean up the temp test directory after the full run.
    */
   onComplete: () => {
-    const testDir = process.env.KECHIMOCHI_DATA_DIR;
-    if (testDir) {
-      cleanupTestDir(testDir);
-      console.log(`[e2e] Cleaned up test database directory: ${testDir}`);
-    }
+    // No-op: Isolation directories are now cleaned up in afterSession
   },
 };
