@@ -26,8 +26,8 @@ export async function searchJiten(title: string, contentType: string): Promise<J
     const mediaType = MEDIA_TYPE_MAP[contentType] || 0;
     
     const validateResults = (results: JitenResult[]) => {
-        // If there are more than 6 results, it's likely a false positive.
-        if (results.length > 6) return [];
+        // If there are more than 25 results, it's likely a false positive.
+        if (results.length > 25) return [];
         return results;
     };
 
@@ -93,7 +93,7 @@ export async function searchJiten(title: string, contentType: string): Promise<J
 async function performSearch(query: string, mediaType: number): Promise<JitenResult[]> {
     const params = new URLSearchParams({
         titleFilter: query,
-        limit: '7'
+        limit: '26'
     });
     if (mediaType > 0) {
         params.append('mediaType', mediaType.toString());
