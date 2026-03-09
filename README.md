@@ -11,7 +11,7 @@
 ---
 
 > [!CAUTION]
-> **WARNING: VIBE-CODED SOFTWARE -- USE AT YOUR OWN RISK**
+> **WARNING: VIBE-CODED SOFTWARE: USE AT YOUR OWN RISK**
 >
 > This application was **entirely vibe-coded**. That means it was built rapidly with AI assistance,
 > without formal testing, code review, or quality assurance processes. There are certainly bugs
@@ -37,32 +37,47 @@ Kechimochi is a **desktop activity tracker** designed for people studying langua
 ## Features
 
 ### Dashboard
-- **Tracking Heatmap** -- A GitHub-style yearly contribution heatmap showing your daily activity. Navigate between years to see your historical immersion journey.
-- **Study Stats** -- A statistics panel showing:
-  - Total lifetime logs and media entries
-  - Longest consecutive study streak and current active streak
-  - Daily averages (total and per activity type)
-  - Date of first recorded entry
-- **Activity Breakdown** -- A doughnut chart showing how your time is distributed across activity types (Reading, Watching, Playing, etc.)
-- **Activity Visualization** -- A bar or line chart showing your immersion over time, with configurable time ranges:
-  - **Weekly** -- Day-by-day breakdown
-  - **Monthly** -- Week-by-week breakdown
-  - **Yearly** -- Month-by-month breakdown
-- **Recent Activity** -- A timeline feed of your latest logged sessions, with the ability to delete individual entries.
+* **Tracking Heatmap**: A GitHub style yearly contribution heatmap showing your daily activity. Navigate between years to view your historical immersion journey.
+* **Study Stats**: A statistics panel providing insights into your habits:
+    * Total lifetime logs and media entries.
+    * Longest consecutive study streak and current active streak.
+    * Daily averages: total and per activity type.
+    * Date of first recorded entry.
+* **Activity Breakdown**: A doughnut chart visualizing time distribution across activity types such as Reading, Watching, or Playing.
+* **Activity Visualization**: Bar or line charts showing immersion over time with configurable ranges:
+    * **Weekly**: Day by day breakdown.
+    * **Monthly**: Week by week breakdown.
+    * **Yearly**: Month by month breakdown.
+* **Recent Activity**: A timeline feed of your latest logged sessions with the ability to delete individual entries.
 
-### Library
-- **Kanban Board** -- Organize your media into **Active** and **Finished** columns using drag-and-drop.
-- **Media Management** -- Add, track, and manage individual media titles (books, shows, games, etc.)
-- **Auto-status Updates** -- Logging activity for a "Finished" title automatically moves it back to "Active".
+### Library and Media Management
+* **Media Grid**: A grid view to track your media titles.
+* **Power Search**: Real time fuzzy search 
+* **Advanced Filtering**: Filter your library by activity type or status
+* **Media Details**: A comprehensive view for each title including:
+    * **Metadata Management**: Edit titles, descriptions, and custom fields.
+    * **Contextual Tagging**: Smart content types tailored to the activity type.
+    * **Progress Tracking**: Update statuses like Ongoing, Complete, Dropped, etc.
 
-### Multi-Profile Support
-- Create and switch between multiple user profiles.
-- Each profile has its own independent database.
-- Delete or wipe profiles as needed.
+### Metadata Importers
+Automatically fetch covers, descriptions, and metadata from various sources:
+* **Visual Novels**: VNDB
+* **Manga and Books**: Bookmeter, BookWalker, Cmoa, Shonen Jump Plus
+* **Anime and Movies**: AniList, IMDb
+* **Video Games**: Backloggd
+With Jiten.moe metadata integration
 
-### CSV Import / Export
-- **Import** -- Bring in your data from other tracking tools. Supports CSV files with columns: `Date`, `Log Name`, `Media Type`, `Duration`, `Language`.
-- **Export** -- Export your logs to CSV with optional date range filtering.
+### Reading Analysis
+* **Reading Report Card**: Analyzes your reading speed across media types.
+* **Progress Projections**: Estimates remaining time and completion rates for active content based on your historical trends.
+
+### Multi-Profile and Personalization
+* **Isolated Profiles**: Create and switch between multiple user profiles, each with its own independent SQLite database.
+* **Theme System**: Choose from 12 curated themes including Light, Dark, Pastel Pink, Molokai, Noctua Brown, and multiple greyscale options.
+
+### Data Management
+* **Activity Portability**: Import or export activity logs in CSV format.
+* **Library Portability**: Export your entire media library to CSV or import new libraries from other users or backups.
 
 ## Prerequisites
 
