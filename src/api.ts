@@ -135,6 +135,10 @@ export async function readFileBytes(path: string): Promise<number[]> {
   return await invoke('read_file_bytes', { path });
 }
 
+export async function downloadAndSaveImage(mediaId: number, url: string): Promise<string> {
+  return await invoke('download_and_save_image', { mediaId, url });
+}
+
 export async function getUsername(): Promise<string> {
   return await invoke('get_username');
 }
