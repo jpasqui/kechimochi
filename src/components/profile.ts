@@ -1,13 +1,13 @@
 import { Component } from '../core/component';
 import { html } from '../core/html';
-import { 
-    getAllMedia, getLogsForMedia, importCsv, exportCsv, deleteProfile, 
-    clearActivities, wipeEverything, exportMediaCsv, analyzeMediaCsv, 
-    applyMediaImport, switchProfile, listProfiles, getSetting, setSetting 
+import {
+    getAllMedia, getLogsForMedia, importCsv, exportCsv, deleteProfile,
+    clearActivities, wipeEverything, exportMediaCsv, analyzeMediaCsv,
+    applyMediaImport, switchProfile, listProfiles, getSetting, setSetting
 } from '../api';
-import { 
-    customPrompt, showExportCsvModal, customAlert, customConfirm, 
-    showMediaCsvConflictModal, initialProfilePrompt 
+import {
+    customPrompt, showExportCsvModal, customAlert, customConfirm,
+    showMediaCsvConflictModal, initialProfilePrompt
 } from '../modals';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
@@ -54,7 +54,9 @@ export class ProfileView extends Component<ProfileState> {
         const vnCount = await getSetting('stats_vn_count') || '0';
         const timestamp = await getSetting('stats_report_timestamp') || '';
 
+        const currentProfile = localStorage.getItem('kechimochi_profile') || 'default';
         this.setState({
+            currentProfile,
             theme,
             report: {
                 novelSpeed,
@@ -69,7 +71,8 @@ export class ProfileView extends Component<ProfileState> {
     }
 
     async render() {
-        if (!this.isRefreshing && this.state.report.timestamp === '') {
+        const localStorageProfile = localStorage.getItem('kechimochi_profile') || 'default';
+        if (!this.isRefreshing && (this.state.report.timestamp === '' || this.state.currentProfile !== localStorageProfile)) {
             this.isRefreshing = true;
             try {
                 await this.loadData();
