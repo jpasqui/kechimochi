@@ -1,7 +1,7 @@
-import { getAllMedia, getLogsForMedia, updateMedia, uploadCoverImage, readFileBytes, Media, getLogs } from '../api';
+import { getAllMedia, getLogsForMedia, updateMedia, uploadCoverImage, readFileBytes, Media, addMedia, deleteMedia } from '../api';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { customPrompt, showImportMergeModal, customAlert } from '../modals';
+import { customPrompt, showImportMergeModal, customAlert, showAddMediaModal, customConfirm } from '../modals';
 import { fetchMetadataForUrl, isValidImporterUrl, getAvailableSourcesForContentType } from '../importers';
 
 export class MediaView {
@@ -35,23 +35,7 @@ export class MediaView {
 
     private async loadData() {
         try {
-            this.currentMediaList = await getAllMedia();
-
-            const allLogs = await getLogs();
-            const latestLogDateByMediaId = new Map<number, string>();
-            for (const log of allLogs) {
-                if (!latestLogDateByMediaId.has(log.media_id)) {
-                    latestLogDateByMediaId.set(log.media_id, log.date);
-                }
-            }
-
-            this.currentMediaList.sort((a, b) => {
-                const dateA = latestLogDateByMediaId.get(a.id!) || "";
-                const dateB = latestLogDateByMediaId.get(b.id!) || "";
-                if (dateA > dateB) return -1;
-                if (dateA < dateB) return 1;
-                return b.id! - a.id!;
-            });
+            this.currentMediaList = await getAllMedia(); // Already sorted by backend: Active first, then by last activity date.
 
             if (this.targetMediaId !== null) {
                 const idx = this.currentMediaList.findIndex(m => m.id === this.targetMediaId);
@@ -80,49 +64,6 @@ export class MediaView {
             return;
         }
 
-        const gridItemsHtmlPromises = this.currentMediaList.map(async (media, index) => {
-            let imgSrc = '';
-            if (media.cover_image && media.cover_image.trim() !== '') {
-                if (this.imageCache.has(media.cover_image)) {
-                    imgSrc = this.imageCache.get(media.cover_image)!;
-                } else {
-                    try {
-                        const bytes = await readFileBytes(media.cover_image);
-                        const blob = new Blob([new Uint8Array(bytes)]);
-                        imgSrc = URL.createObjectURL(blob);
-                        this.imageCache.set(media.cover_image, imgSrc);
-                    } catch (e) {
-                        console.error("Failed to load image bytes for grid", e);
-                    }
-                }
-            }
-
-            const imageContent = imgSrc !== ''
-                ? `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover; display: block;" alt="${media.title}" />`
-                : `<div style="flex: 1; display: flex; flex-direction: column; padding: 1.2rem 1rem; color: var(--text-secondary); text-align: center; justify-content: space-between;">
-                    <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; line-height: 1.3;">${media.title}</div>
-                    <div style="font-size: 0.75rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px;">No Image</div>
-                 </div>`;
-
-            const typeMatch = this.gridTypeFilter === 'All' || (media.content_type || 'Unknown') === this.gridTypeFilter;
-            const matchesQuery = media.title.toLowerCase().includes(this.gridSearchQuery.toLowerCase());
-            const displayStyle = (matchesQuery && typeMatch) ? 'display: flex;' : 'display: none;';
-
-            const contentType = media.content_type || 'Unknown';
-            const badgeHtml = (contentType !== 'Unknown' && contentType.trim() !== '')
-                ? `<div class="grid-item-type-badge">${contentType}</div>`
-                : '';
-
-            return `
-              <div class="media-grid-item" data-index="${index}" data-type="${media.content_type || 'Unknown'}" title="${media.title}" style="cursor: pointer; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-dark); border: 1px solid var(--border-color); flex-direction: column; height: 100%; position: relative; ${displayStyle}">
-                  ${imageContent}
-                  ${badgeHtml}
-              </div>
-          `;
-        });
-
-        const gridItemsHtml = (await Promise.all(gridItemsHtmlPromises)).join('');
-
         const uniqueTypes = Array.from(new Set(this.currentMediaList.map(m => m.content_type || 'Unknown'))).sort();
         const typeOptionsHtml = uniqueTypes.map(t => `<option value="${t}" ${this.gridTypeFilter === t ? 'selected' : ''}>${t}</option>`).join('');
 
@@ -131,6 +72,12 @@ export class MediaView {
               .media-grid-item {
                   transition: transform 0.2s, box-shadow 0.2s;
                   z-index: 1;
+                  animation: fadeIn 0.3s ease-out forwards;
+                  opacity: 0;
+              }
+              @keyframes fadeIn {
+                  from { opacity: 0; transform: translateY(10px); }
+                  to { opacity: 1; transform: translateY(0); }
               }
               .media-grid-item:hover {
                   transform: scale(1.05);
@@ -139,7 +86,10 @@ export class MediaView {
               }
           </style>
           <div style="padding: 0 1rem; display: flex; gap: 1rem; justify-content: space-between; align-items: center;">
-              <h2 style="margin: 0.5rem 0; color: var(--text-primary); white-space: nowrap;">Library</h2>
+              <div style="display: flex; align-items: center; gap: 1rem;">
+                  <h2 style="margin: 0.5rem 0; color: var(--text-primary); white-space: nowrap;">Library</h2>
+                  <button class="btn btn-ghost" id="btn-add-media-grid" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">+ New Media</button>
+              </div>
               <input type="text" id="grid-search-filter" placeholder="Search title..." style="flex: 1; min-width: 0; padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--text-primary); outline: none;" value="${this.gridSearchQuery}" autocomplete="off" />
               <select id="grid-type-select" style="padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--text-primary); outline: none; cursor: pointer;">
                   <option value="All" ${this.gridTypeFilter === 'All' ? 'selected' : ''}>All Types</option>
@@ -147,10 +97,99 @@ export class MediaView {
               </select>
           </div>
           
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-rows: 320px; gap: 1.5rem; overflow-y: auto; flex: 1; padding: 0.5rem 1rem 2rem 1rem; align-content: flex-start;">
-              ${gridItemsHtml}
+          <div id="media-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-rows: 320px; gap: 1.5rem; overflow-y: auto; flex: 1; padding: 0.5rem 1rem 2rem 1rem; align-content: flex-start;">
+              <!-- Items will be injected here progressively -->
           </div>
       `;
+
+        const container = document.getElementById('media-grid-container')!;
+        
+        // Progressive rendering
+        const batchSize = 10;
+        let currentIndex = 0;
+
+        const renderBatch = async () => {
+            const end = Math.min(currentIndex + batchSize, this.currentMediaList.length);
+            for (let i = currentIndex; i < end; i++) {
+                const media = this.currentMediaList[i];
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'media-grid-item';
+                itemDiv.dataset.index = i.toString();
+                itemDiv.dataset.type = media.content_type || 'Unknown';
+                itemDiv.title = media.title;
+                itemDiv.style.cssText = `cursor: pointer; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-dark); border: 1px solid var(--border-color); display: flex; flex-direction: column; height: 100%; position: relative;`;
+                
+                const matchesQuery = media.title.toLowerCase().includes(this.gridSearchQuery.toLowerCase());
+                const typeMatch = this.gridTypeFilter === 'All' || (media.content_type || 'Unknown') === this.gridTypeFilter;
+                if (!matchesQuery || !typeMatch) itemDiv.style.display = 'none';
+
+                const contentType = media.content_type || 'Unknown';
+                const badgeHtml = (contentType !== 'Unknown' && contentType.trim() !== '')
+                    ? `<div class="grid-item-type-badge">${contentType}</div>`
+                    : '';
+
+                itemDiv.innerHTML = `
+                    <div class="image-placeholder" style="flex: 1; display: flex; flex-direction: column; padding: 1.2rem 1rem; color: var(--text-secondary); text-align: center; justify-content: space-between;">
+                        <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; line-height: 1.3;">${media.title}</div>
+                        <div style="font-size: 0.75rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px;">Loading...</div>
+                    </div>
+                    ${badgeHtml}
+                `;
+
+                itemDiv.addEventListener('click', () => {
+                   this.currentIndex = i;
+                   this.viewMode = 'detail';
+                   this.render();
+                });
+
+                container.appendChild(itemDiv);
+
+                // Load image asynchronously
+                (async () => {
+                    if (media.cover_image && media.cover_image.trim() !== '') {
+                        let imgSrc = '';
+                        if (this.imageCache.has(media.cover_image)) {
+                            imgSrc = this.imageCache.get(media.cover_image)!;
+                        } else {
+                            try {
+                                const bytes = await readFileBytes(media.cover_image);
+                                const blob = new Blob([new Uint8Array(bytes)]);
+                                imgSrc = URL.createObjectURL(blob);
+                                this.imageCache.set(media.cover_image, imgSrc);
+                            } catch (e) {}
+                        }
+                        if (imgSrc) {
+                            itemDiv.innerHTML = `
+                                <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover; display: block;" alt="${media.title}" />
+                                ${badgeHtml}
+                            `;
+                        } else {
+                            itemDiv.innerHTML = `
+                                <div style="flex: 1; display: flex; flex-direction: column; padding: 1.2rem 1rem; color: var(--text-secondary); text-align: center; justify-content: space-between;">
+                                    <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; line-height: 1.3;">${media.title}</div>
+                                    <div style="font-size: 0.75rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px;">No Image</div>
+                                </div>
+                                ${badgeHtml}
+                            `;
+                        }
+                    } else {
+                        itemDiv.innerHTML = `
+                            <div style="flex: 1; display: flex; flex-direction: column; padding: 1.2rem 1rem; color: var(--text-secondary); text-align: center; justify-content: space-between;">
+                                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; line-height: 1.3;">${media.title}</div>
+                                <div style="font-size: 0.75rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px;">No Image</div>
+                            </div>
+                            ${badgeHtml}
+                        `;
+                    }
+                })();
+            }
+            currentIndex = end;
+            if (currentIndex < this.currentMediaList.length) {
+                requestAnimationFrame(renderBatch);
+            }
+        };
+
+        requestAnimationFrame(renderBatch);
 
         // Setup filtering
         const applyFilters = () => {
@@ -185,18 +224,26 @@ export class MediaView {
             });
         }
 
-        // Setup click listeners for grid items
-        document.querySelectorAll('.media-grid-item').forEach(el => {
-            el.addEventListener('click', async (e) => {
-                const target = e.currentTarget as HTMLElement;
-                const index = parseInt(target.dataset.index!);
-                if (!isNaN(index)) {
-                    this.currentIndex = index;
-                    this.viewMode = 'detail';
-                    await this.render();
-                }
+        // setup add media button
+        document.getElementById('btn-add-media-grid')?.addEventListener('click', async () => {
+            const result = await showAddMediaModal();
+            if (!result) return;
+            
+            const newId = await addMedia({ 
+                title: result.title, 
+                media_type: result.type, 
+                status: "Active", 
+                language: "Japanese", 
+                description: "", 
+                cover_image: "", 
+                extra_data: "{}", 
+                content_type: result.contentType, 
+                tracking_status: "Untracked" 
             });
+            await this.loadData();
+            await this.jumpToMedia(newId);
         });
+
     }
 
     private async renderDetail() {
@@ -314,6 +361,12 @@ export class MediaView {
         <!-- Left Column: Cover -->
         <div style="flex: 0 0 300px; display: flex; flex-direction: column;">
             ${imageHtml}
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.5rem;">
+                <button class="btn" id="btn-delete-media-detail" style="background-color: #ff4757; color: white; border: none; font-weight: bold; width: 100%; padding: 0.6rem; font-size: 0.9rem;">Delete Media</button>
+                <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.2; text-align: center;">
+                    <strong>DANGER:</strong> COMPLETELY REMOVES THIS MEDIA AND <strong>ALL</strong> ASSOCIATED WORK LOGS FOR ALL USERS.
+                </div>
+            </div>
         </div>
 
         <!-- Right Column: Details -->
@@ -522,12 +575,62 @@ export class MediaView {
 
         makeEditable('media-title', 'title', false);
         makeEditable('media-desc', 'description', true);
-        makeEditable('media-type', 'media_type', false);
+
+        // Media Type single click editor
+        const mediaTypeBadge = document.getElementById('media-type');
+        if (mediaTypeBadge) {
+            mediaTypeBadge.addEventListener('click', () => {
+                const select = document.createElement('select');
+                select.style.background = 'var(--bg-darker)';
+                select.style.color = 'var(--text-primary)';
+                select.style.border = '1px solid var(--accent)';
+                select.style.padding = '0.2rem 0.5rem';
+                select.style.borderRadius = '12px';
+                select.style.outline = 'none';
+
+                const options = ["Reading", "Watching", "Playing", "Listening", "None"];
+                select.innerHTML = options.map(opt => `<option value="${opt}" ${opt === media.media_type ? 'selected' : ''}>${opt}</option>`).join('');
+
+                let isSaving = false;
+                const save = async () => {
+                    if (isSaving) return;
+                    isSaving = true;
+                    const newValue = select.value;
+                    if (newValue && newValue !== media.media_type) {
+                        media.media_type = newValue;
+                        try {
+                            await updateMedia(media);
+                        } catch (e) {
+                            console.error("Update failed", e);
+                        }
+                    }
+                    await this.renderDetailContent(media);
+                };
+
+                select.addEventListener('change', save);
+                select.addEventListener('keydown', (e: KeyboardEvent) => {
+                    if (e.key === 'Escape') this.renderDetailContent(media);
+                });
+                
+                setTimeout(() => {
+                    const outsideClick = (e: MouseEvent) => {
+                        if (document.body.contains(select) && e.target !== select) {
+                            window.removeEventListener('click', outsideClick);
+                            if (!isSaving) this.renderDetailContent(media);
+                        }
+                    };
+                    window.addEventListener('click', outsideClick);
+                }, 100);
+
+                mediaTypeBadge.replaceWith(select);
+                select.focus();
+            });
+        }
 
         // Content Type Dropdown Editor
         const contentTypeBadge = document.getElementById('media-content-type');
         if (contentTypeBadge) {
-            contentTypeBadge.addEventListener('dblclick', () => {
+            contentTypeBadge.addEventListener('click', () => {
                 const select = document.createElement('select');
                 select.style.background = 'var(--bg-darker)';
                 select.style.color = 'var(--text-primary)';
@@ -586,7 +689,7 @@ export class MediaView {
         // Tracking Status Dropdown Editor
         const trackingStatusBadge = document.getElementById('media-tracking-status');
         if (trackingStatusBadge) {
-            trackingStatusBadge.addEventListener('dblclick', () => {
+            trackingStatusBadge.addEventListener('click', () => {
                 const select = document.createElement('select');
                 select.style.background = 'var(--bg-darker)';
                 select.style.color = 'var(--text-primary)';
@@ -635,7 +738,7 @@ export class MediaView {
             });
         }
 
-        // Status Toggle handling
+        // Status Toggle handling (this is a click-based toggle already, so no changes needed for "single click")
         const statusToggle = document.getElementById('status-toggle') as HTMLInputElement;
         const statusLabel = document.getElementById('status-label');
         if (statusToggle && statusLabel) {
@@ -650,6 +753,26 @@ export class MediaView {
                 }
             });
         }
+
+        // Delete Media Detail
+        document.getElementById('btn-delete-media-detail')?.addEventListener('click', async () => {
+            const yes = await customConfirm(
+                "Delete Media", 
+                "Are you sure? This will PERMANENTLY delete this media entry and ALL activity logs for ALL users. This cannot be undone.",
+                "btn-danger",
+                "Delete Permanently"
+            );
+            if (yes) {
+               try {
+                   await deleteMedia(media.id!);
+                   this.viewMode = 'grid';
+                   await this.loadData();
+                   await this.render();
+               } catch (e) {
+                   await customAlert("Error", "Failed to delete media: " + String(e));
+               }
+            }
+        });
 
         // Extra Data handling
         document.querySelectorAll('.editable-extra').forEach(el => {

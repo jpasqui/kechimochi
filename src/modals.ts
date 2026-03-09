@@ -294,7 +294,7 @@ export async function showExportCsvModal(): Promise<{mode: 'all' | 'range', star
     });
 }
 
-export async function showAddMediaModal(): Promise<{title: string, type: string} | null> {
+export async function showAddMediaModal(): Promise<{title: string, type: string, contentType: string} | null> {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -312,13 +312,19 @@ export async function showAddMediaModal(): Promise<{title: string, type: string}
                         <input type="text" id="add-media-title" autocomplete="off" style="background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm);" />
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <label style="font-size: 0.85rem; color: var(--text-secondary);">Media Type</label>
+                        <label style="font-size: 0.85rem; color: var(--text-secondary);">Activity Type</label>
                         <select id="add-media-type" style="background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm); outline: none;">
                             <option value="Reading">Reading</option>
                             <option value="Watching">Watching</option>
                             <option value="Playing">Playing</option>
                             <option value="Listening">Listening</option>
                             <option value="None">None</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary);">Media Content Type</label>
+                        <select id="add-media-content-type" style="background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm); outline: none;">
+                            <!-- Populated dynamically -->
                         </select>
                     </div>
                 </div>
@@ -336,13 +342,28 @@ export async function showAddMediaModal(): Promise<{title: string, type: string}
         
         const titleInput = overlay.querySelector('#add-media-title') as HTMLInputElement;
         const typeInput = overlay.querySelector('#add-media-type') as HTMLSelectElement;
+        const contentInput = overlay.querySelector('#add-media-content-type') as HTMLSelectElement;
+
+        const updateContentTypes = () => {
+            const mType = typeInput.value;
+            let options: string[] = ['Unknown'];
+            if (mType === 'Reading') options.push('Visual Novel', 'Manga', 'Novel');
+            else if (mType === 'Playing') options.push('Videogame');
+            else if (mType === 'Listening') options.push('Podcast');
+            else if (mType === 'Watching') options.push('Anime', 'Movie', 'Youtube Video', 'Livestream', 'Drama');
+
+            contentInput.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+        };
+
+        typeInput.addEventListener('change', updateContentTypes);
+        updateContentTypes(); // Initial population
         
         overlay.querySelector('#add-media-cancel')!.addEventListener('click', () => { cleanup(); resolve(null); });
         overlay.querySelector('#add-media-confirm')!.addEventListener('click', () => { 
             const title = titleInput.value.trim();
             if (!title) return;
             cleanup(); 
-            resolve({ title, type: typeInput.value }); 
+            resolve({ title, type: typeInput.value, contentType: contentInput.value }); 
         });
         titleInput.focus();
     });

@@ -1,5 +1,4 @@
-import { getAllMedia, getLogs, Media, addMedia, deleteMedia } from '../api';
-import { showAddMediaModal, customConfirm } from '../modals';
+import { getAllMedia, getLogs, Media } from '../api';
 
 export class Library {
   private container: HTMLElement;
@@ -14,7 +13,6 @@ export class Library {
         
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h2 style="margin: 0;">Tasks</h2>
-          <button class="btn btn-ghost" id="btn-add-media">+ New Media</button>
         </div>
 
         <div id="media-kanban" style="display: flex; gap: 1rem; overflow-x: auto; flex: 1; min-height: 400px; padding-bottom: 1rem;">
@@ -71,13 +69,10 @@ export class Library {
             <h4 style="text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; pointer-events: none;">${status} (${items.length})</h4>
             <div style="display: flex; flex-direction: column; gap: 0.5rem; flex: 1; overflow-y: auto;">
               ${items.map(m => `
-                <div class="card kanban-item" draggable="true" data-media-id="${m.id}" style="padding: 1rem; cursor: grab; transition: transform 0.1s var(--transition-fast);">
-                  <div style="font-weight: 500; font-size: 1rem; color: var(--text-primary); margin-bottom: 0.5rem; pointer-events: none;">${m.title}</div>
+                <div class="card kanban-item clickable" draggable="true" data-media-id="${m.id}" style="padding: 1rem; cursor: grab; transition: transform 0.1s var(--transition-fast);">
+                  <div style="font-weight: 500; font-size: 1rem; color: var(--text-primary); margin-bottom: 0.2rem; pointer-events: none;">${m.title}</div>
                   <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary); pointer-events: none;">
                     <span>${m.language}</span>
-                  </div>
-                  <div style="margin-top: 0.5rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
-                    <button class="btn btn-danger delete-media-btn" data-media-id="${m.id}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Del</button>
                   </div>
                 </div>
               `).join('')}
@@ -111,26 +106,16 @@ export class Library {
         });
     });
 
-    // Delete buttons
-    kanban.querySelectorAll('.delete-media-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+    // Navigate on click
+    kanban.querySelectorAll('.kanban-item').forEach(item => {
+        item.addEventListener('click', (e) => {
             const id = parseInt((e.currentTarget as HTMLElement).dataset.mediaId!);
-            const yes = await customConfirm("Delete Media", "Are you sure you want to delete this media and all its logs?");
-            if (yes) {
-                await deleteMedia(id);
-                this.loadData();
-            }
+            window.dispatchEvent(new CustomEvent('app-navigate', { detail: { view: 'media', focusMediaId: id } }));
         });
     });
   }
 
   private setupListeners() {
-    // Add Media
-    document.getElementById('btn-add-media')?.addEventListener('click', async () => {
-       const result = await showAddMediaModal();
-       if (!result) return;
-       
-       addMedia({ title: result.title, media_type: result.type, status: "Active", language: "Japanese", description: "", cover_image: "", extra_data: "{}", content_type: "Unknown", tracking_status: "Untracked" }).then(() => this.loadData());
-    });
+    // No specific listeners here anymore as "New Media" moved to Library grid
   }
 }

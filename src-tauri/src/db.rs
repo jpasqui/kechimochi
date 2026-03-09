@@ -170,7 +170,14 @@ pub fn list_profiles(app_handle: &tauri::AppHandle) -> std::result::Result<Vec<S
 
 // Media Operations
 pub fn get_all_media(conn: &Connection) -> Result<Vec<Media>> {
-    let mut stmt = conn.prepare("SELECT id, title, media_type, status, language, description, cover_image, extra_data, content_type, tracking_status FROM shared.media")?;
+    let mut stmt = conn.prepare(
+        "SELECT id, title, media_type, status, language, description, cover_image, extra_data, content_type, tracking_status 
+         FROM shared.media m
+         ORDER BY 
+            CASE WHEN m.status NOT IN ('Archived', 'Inactive', 'Finished', 'Completed') THEN 0 ELSE 1 END,
+            (SELECT MAX(date) FROM main.activity_logs WHERE media_id = m.id) DESC,
+            m.id DESC"
+    )?;
     let media_iter = stmt.query_map([], |row| {
         Ok(Media {
             id: row.get(0)?,
