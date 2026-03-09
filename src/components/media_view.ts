@@ -1,4 +1,4 @@
-import { getAllMedia, getLogsForMedia, updateMedia, uploadCoverImage, readFileBytes, Media, addMedia, deleteMedia } from '../api';
+import { getAllMedia, getLogsForMedia, updateMedia, uploadCoverImage, readFileBytes, Media, addMedia, deleteMedia, getSetting } from '../api';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { customPrompt, showImportMergeModal, customAlert, showAddMediaModal, customConfirm, showJitenSearchModal } from '../modals';
@@ -601,14 +601,46 @@ export class MediaView {
                     const isReadingType = ["Novel", "Visual Novel", "Manga"].includes(media.content_type || "");
                     const isComplete = media.tracking_status === 'Complete';
 
-                    if (isReadingType && isComplete && totalMin > 0) {
+                    if (isReadingType && totalMin > 0) {
                         try {
                             const extra = JSON.parse(media.extra_data || "{}");
                             const charRaw = extra["Character count"] || "";
                             const charCount = parseInt(charRaw.replace(/,/g, ''));
                             if (!isNaN(charCount) && charCount > 0) {
-                                const speed = Math.round(charCount / (totalMin / 60));
-                                readingSpeedHtml = `<span style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. Reading Speed: <strong style="color: var(--text-primary);">${speed.toLocaleString()} char/hr</strong></span>`;
+                                if (isComplete) {
+                                    const speed = Math.round(charCount / (totalMin / 60));
+                                    readingSpeedHtml = `<span style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. Reading Speed: <strong style="color: var(--text-primary);">${speed.toLocaleString()} char/hr</strong></span>`;
+                                } else {
+                                    // Fetch average speed from settings
+                                    let speedKey = "";
+                                    if (media.content_type === "Novel") speedKey = "stats_novel_speed";
+                                    else if (media.content_type === "Manga") speedKey = "stats_manga_speed";
+                                    else if (media.content_type === "Visual Novel") speedKey = "stats_vn_speed";
+
+                                    if (speedKey) {
+                                        const avgSpeedStr = await getSetting(speedKey);
+                                        const avgSpeed = parseInt(avgSpeedStr || "0");
+                                        if (avgSpeed > 0) {
+                                            const estTotalMin = (charCount / avgSpeed) * 60;
+                                            const totalEstTotalMin = Math.round(estTotalMin);
+                                            const estRemainingMin = Math.max(0, totalEstTotalMin - totalMin);
+                                            const completionRate = Math.min(100, Math.round((totalMin / estTotalMin) * 100));
+
+                                            const rh = Math.floor(estRemainingMin / 60);
+                                            const rm = estRemainingMin % 60;
+                                            const remStr = rh > 0 ? `${rh}h${rm}min` : `${rm}min`;
+
+                                            const th = Math.floor(totalEstTotalMin / 60);
+                                            const tm = totalEstTotalMin % 60;
+                                            const totalEstStr = th > 0 ? `${th}h${tm}min` : `${tm}min`;
+
+                                            readingSpeedHtml = `
+                                                <span style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. remaining time: <strong style="color: var(--text-primary);">${remStr}</strong> (<strong style="color: var(--text-primary);">${totalEstStr}</strong> total)</span>
+                                                <span style="margin-left: 1rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. completion rate: <strong style="color: var(--text-primary);">${completionRate}%</strong></span>
+                                            `;
+                                        }
+                                    }
+                                }
                             }
                         } catch (e) {}
                     }
