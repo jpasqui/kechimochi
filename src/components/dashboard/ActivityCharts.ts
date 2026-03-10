@@ -2,6 +2,7 @@ import { Component } from '../../core/component';
 import { html } from '../../core/html';
 import { ActivitySummary } from '../../api';
 import Chart from 'chart.js/auto';
+import { formatStatsDuration } from '../../utils/time';
 
 interface ActivityChartsState {
     logs: ActivitySummary[];
@@ -193,9 +194,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                         callbacks: {
                             label: function(context: any) {
                                 const val = context.parsed;
-                                const h = Math.floor(val / 60);
-                                const m = Math.round(val % 60);
-                                return `${context.label}: ${h > 0 ? h + 'h' : ''}${m}m`;
+                                return `${context.dataset.label || context.label}: ${formatStatsDuration(val, true)}`;
                             }
                         }
                     }
@@ -247,11 +246,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                         ticks: { 
                             color: '#a0a0b0',
                             callback: function(value: any) { 
-                                const h = Math.floor(value / 60);
-                                const m = Math.round(value % 60);
-                                if (h > 0 && m === 0) return `${h}h`;
-                                if (h > 0) return `${h}h ${m}m`;
-                                return `${m}m`;
+                                return formatStatsDuration(value, true);
                             }
                         } 
                     }
@@ -262,9 +257,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                         callbacks: {
                             label: function(context: any) {
                                 const val = context.parsed.y;
-                                const h = Math.floor(val / 60);
-                                const m = Math.round(val % 60);
-                                return `${context.label}: ${h > 0 ? h + 'h' : ''}${m}m`;
+                                return `${context.dataset.label}: ${formatStatsDuration(val, true)}`;
                             }
                         }
                     }

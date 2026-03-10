@@ -1,6 +1,7 @@
 import { Component } from '../../core/component';
 import { html } from '../../core/html';
 import { ActivitySummary, Media } from '../../api';
+import { formatStatsDuration } from '../../utils/time';
 
 interface StatsCardState {
     logs: ActivitySummary[];
@@ -34,9 +35,7 @@ export class StatsCard extends Component<StatsCardState> {
         mediaBreakdown.forEach(v => totalMins += v);
         const loggedDaysCount = uniqueDates.length || 1;
         const totalAvgMins = totalMins / loggedDaysCount;
-        const totalAvgH = Math.floor(totalAvgMins / 60);
-        const totalAvgM = Math.round(totalAvgMins % 60);
-        const totalAvgFormat = totalAvgH > 0 ? `${totalAvgH}h ${totalAvgM}m` : `${totalAvgM}m`;
+        const totalAvgFormat = formatStatsDuration(totalAvgMins);
 
         if (uniqueDates.length > 0) {
             let streakCount = 1;
@@ -84,14 +83,10 @@ export class StatsCard extends Component<StatsCardState> {
 
         const sortedBreakdown = Array.from(mediaBreakdown.entries()).sort((a,b) => b[1] - a[1]);
         const breakdownHtml = sortedBreakdown.map(([mtype, mins]) => {
-            let h = Math.floor(mins / 60);
-            let m = Math.round(mins % 60);
-            let totalFormat = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+            const totalFormat = formatStatsDuration(mins, true);
             
             const avgMins = mins / loggedDaysCount;
-            const avgH = Math.floor(avgMins / 60);
-            const avgM = Math.round(avgMins % 60);
-            const avgFormat = avgH > 0 ? `${avgH}h ${avgM}m` : `${avgM}m`;
+            const avgFormat = formatStatsDuration(avgMins);
 
             return `
                 <div style="display: flex; flex-direction: column; gap: 0.2rem; background: rgba(255,255,255,0.03); padding: 0.4rem; border-radius: var(--radius-sm);">

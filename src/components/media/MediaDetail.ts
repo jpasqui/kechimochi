@@ -5,6 +5,8 @@ import { customConfirm, customPrompt, showJitenSearchModal, showImportMergeModal
 import { isValidImporterUrl, getAvailableSourcesForContentType, fetchMetadataForUrl } from '../../importers';
 import { open } from '../../utils/dialogs';
 import { MediaLog } from './MediaLog';
+import { setupCopyButton } from '../../utils/clipboard';
+import { formatHhMm } from '../../utils/time';
 
 interface MediaDetailState {
     media: Media;
@@ -225,9 +227,7 @@ export class MediaDetail extends Component<MediaDetailState> {
         const lastLogDate = logs[0].date;
         const firstLogDate = logs[logs.length - 1].date;
         const totalMin = logs.reduce((acc, log) => acc + log.duration_minutes, 0);
-        const h = Math.floor(totalMin / 60);
-        const m = totalMin % 60;
-        const totalStr = h > 0 ? `${h}h${m}min` : `${m}min`;
+        const totalStr = formatHhMm(totalMin);
 
         let verb = "Logged";
         let totalLabel = "Total Time";
@@ -262,12 +262,8 @@ export class MediaDetail extends Component<MediaDetailState> {
                                 const estRemainingMin = Math.max(0, totalEstTotalMin - totalMin);
                                 const completionRate = Math.min(100, Math.round((totalMin / estTotalMin) * 100));
 
-                                const rh = Math.floor(estRemainingMin / 60);
-                                const rm = estRemainingMin % 60;
-                                const remStr = rh > 0 ? `${rh}h${rm}min` : `${rm}min`;
-                                const th = Math.floor(totalEstTotalMin / 60);
-                                const tm = totalEstTotalMin % 60;
-                                const totalEstStr = th > 0 ? `${th}h${tm}min` : `${tm}min`;
+                                const remStr = formatHhMm(estRemainingMin);
+                                const totalEstStr = formatHhMm(totalEstTotalMin);
 
                                 readingSpeedHtml = `
                                     <span id="est-remaining-time" style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. remaining time: <strong style="color: var(--text-primary);">${remStr}</strong> (<strong style="color: var(--text-primary);">${totalEstStr}</strong> total)</span>
@@ -310,19 +306,8 @@ export class MediaDetail extends Component<MediaDetailState> {
             }
         });
 
-        root.querySelector('#btn-copy-title')?.addEventListener('click', async (e) => {
-            const btn = e.currentTarget as HTMLElement;
-            try {
-                await navigator.clipboard.writeText(this.state.media.title);
-                btn.classList.add('success');
-                const originalSvg = btn.innerHTML;
-                btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-                setTimeout(() => {
-                    btn.classList.remove('success');
-                    btn.innerHTML = originalSvg;
-                }, 2000);
-            } catch (err) { }
-        });
+        const copyBtn = root.querySelector('#btn-copy-title') as HTMLElement;
+        if (copyBtn) setupCopyButton(copyBtn, this.state.media.title);
 
         root.querySelector('#btn-search-jiten')?.addEventListener('click', async () => {
             const jitenUrl = await showJitenSearchModal(this.state.media);

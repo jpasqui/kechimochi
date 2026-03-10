@@ -1,6 +1,7 @@
 import { Component } from '../../core/component';
 import { html } from '../../core/html';
 import { ActivitySummary } from '../../api';
+import { formatLoggedDuration } from '../../utils/time';
 
 interface MediaLogState {
     logs: ActivitySummary[];
@@ -22,9 +23,11 @@ export class MediaLog extends Component<MediaLogState> {
         const list = html`<div style="display: flex; flex-direction: column; gap: 0.5rem; flex: 1; overflow-y: auto;"></div>`;
 
         this.state.logs.forEach(log => {
+            const durationStr = formatLoggedDuration(log.duration_minutes, true);
+
             const entry = html`
                 <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border-color); font-size: 0.9rem;">
-                    <span><span style="color: var(--text-secondary);">Activity:</span> ${log.duration_minutes} Minutes</span>
+                    <span><span style="color: var(--text-secondary);">Activity:</span> ${durationStr}</span>
                     <span style="color: var(--text-secondary);">${log.date}</span>
                 </div>
             `;
