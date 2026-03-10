@@ -116,24 +116,24 @@ export class StatsCard extends Component<StatsCardState> {
                 <div style="display: flex; flex-direction: column; gap: 0.75rem; flex: 1;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; width: 100%; text-align: center;">
                         <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${totalLogs}</div>
+                            <div id="stat-total-logs" style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${totalLogs}</div>
                             <div style="font-size: 0.65rem; color: var(--text-secondary);">logs</div>
                         </div>
                         <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${totalMedia}</div>
+                            <div id="stat-total-media" style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${totalMedia}</div>
                             <div style="font-size: 0.65rem; color: var(--text-secondary);">media items</div>
                         </div>
                         <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${maxStreak}</div>
+                            <div id="stat-max-streak" style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${maxStreak}</div>
                             <div style="font-size: 0.65rem; color: var(--text-secondary);">max streak</div>
                         </div>
                         <div style="background: var(--bg-dark); padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${currentStreak}</div>
+                            <div id="stat-current-streak" style="font-size: 1.1rem; font-weight: bold; color: var(--text-primary);">${currentStreak}</div>
                             <div style="font-size: 0.65rem; color: var(--text-secondary);">day streak</div>
                         </div>
                     </div>
                     
-                    <div style="background: var(--accent-purple); padding: 0.5rem; border-radius: var(--radius-sm); text-align: center; color: var(--accent-text); font-weight: 600; font-size: 0.85rem;">
+                    <div id="stat-total-avg" style="background: var(--accent-purple); padding: 0.5rem; border-radius: var(--radius-sm); text-align: center; color: var(--accent-text); font-weight: 600; font-size: 0.85rem;">
                         Total Avg: ${totalAvgFormat} / day
                     </div>
                     
