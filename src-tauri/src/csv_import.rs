@@ -293,6 +293,7 @@ mod tests {
 
     fn setup_test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
+        conn.execute("ATTACH DATABASE ':memory:' AS shared", []).unwrap();
         db::create_tables(&conn).unwrap();
         conn
     }
