@@ -3,8 +3,8 @@ import {
   navigateTo,
   verifyActiveView,
   verifyViewNotBroken,
-  takeAndCompareScreenshot,
-} from '../helpers/interactions.js';
+} from '../helpers/navigation.js';
+import { takeAndCompareScreenshot } from '../helpers/common.js';
 
 describe('Profile CUJ', () => {
   before(async () => {

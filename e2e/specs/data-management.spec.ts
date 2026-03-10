@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { waitForAppReady } from '../helpers/setup.js';
-import { navigateTo, verifyActiveView, dismissAlert } from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { dismissAlert } from '../helpers/common.js';
 
 describe('CUJ: Data Management (CSV Export)', () => {
   let tempExportAll: string;

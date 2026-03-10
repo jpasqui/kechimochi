@@ -1,9 +1,6 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import {
-  navigateTo,
-  verifyActiveView,
-  submitPrompt
-} from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { submitPrompt } from '../helpers/common.js';
 
 describe('Factory Reset CUJ', () => {
   before(async () => {

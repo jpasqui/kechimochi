@@ -3,7 +3,7 @@ import {
   navigateTo,
   verifyActiveView,
   verifyViewNotBroken,
-} from '../helpers/interactions.js';
+} from '../helpers/navigation.js';
 
 type ViewName = 'dashboard' | 'media' | 'profile';
 

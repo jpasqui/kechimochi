@@ -1,5 +1,6 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import { navigateTo, verifyActiveView, submitPrompt, confirmAction } from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { submitPrompt, confirmAction } from '../helpers/common.js';
 
 describe('CUJ: Media Extra Fields and Metadata Management', () => {
   before(async () => {

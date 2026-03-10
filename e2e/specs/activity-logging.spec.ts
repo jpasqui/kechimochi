@@ -1,5 +1,7 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import { navigateTo, verifyActiveView, logActivity, submitPrompt } from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { logActivity } from '../helpers/dashboard.js';
+import { submitPrompt } from '../helpers/common.js';
 
 describe('CUJ: Log Daily Activity', () => {
   before(async () => {

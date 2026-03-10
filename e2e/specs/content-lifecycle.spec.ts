@@ -1,16 +1,13 @@
 import { waitForAppReady } from '../helpers/setup.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { clickMediaItem, setHideArchived, isMediaVisible } from '../helpers/library.js';
 import { 
-    navigateTo, 
-    verifyActiveView, 
-    clickMediaItem,
-    clickMarkAsComplete,
-    getDetailTrackingStatus,
-    isArchivedStatusActive,
-    toggleArchivedStatusDetail,
-    backToGrid,
-    setHideArchived,
-    isMediaVisible
-} from '../helpers/interactions.js';
+    clickMarkAsComplete, 
+    getDetailTrackingStatus, 
+    isArchivedStatusActive, 
+    toggleArchivedStatusDetail, 
+    backToGrid 
+} from '../helpers/media-detail.js';
 
 describe('CUJ: Content Lifecycle (Manual Archiving)', () => {
     before(async () => {

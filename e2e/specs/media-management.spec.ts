@@ -1,5 +1,7 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import { verifyActiveView, addMedia, logActivity } from '../helpers/interactions.js';
+import { verifyActiveView } from '../helpers/navigation.js';
+import { addMedia } from '../helpers/library.js';
+import { logActivity } from '../helpers/dashboard.js';
 
 describe('Media Management CUJs', () => {
   before(async () => {

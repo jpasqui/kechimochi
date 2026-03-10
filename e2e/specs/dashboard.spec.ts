@@ -1,8 +1,6 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import {
-  verifyViewNotBroken,
-  takeAndCompareScreenshot,
-} from '../helpers/interactions.js';
+import { verifyViewNotBroken } from '../helpers/navigation.js';
+import { takeAndCompareScreenshot } from '../helpers/common.js';
 
 describe('Dashboard CUJ', () => {
   before(async () => {

@@ -1,14 +1,9 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import { 
-    navigateTo, 
-    verifyActiveView, 
-    clickMediaItem,
-    addExtraField,
-    calculateReport,
-    getProjectionValue,
-    logActivityGlobal,
-    clickBackButton
-} from '../helpers/interactions.js';
+import { navigateTo } from '../helpers/navigation.js';
+import { clickMediaItem } from '../helpers/library.js';
+import { addExtraField, getProjectionValue, clickBackButton } from '../helpers/media-detail.js';
+import { calculateReport } from '../helpers/profile.js';
+import { logActivityGlobal } from '../helpers/dashboard.js';
 
 describe('CUJ: Progress Analysis (Projections)', () => {
     before(async () => {

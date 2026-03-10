@@ -1,16 +1,13 @@
 import { waitForAppReady } from '../helpers/setup.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { addMedia, clickMediaItem } from '../helpers/library.js';
 import { 
-    navigateTo, 
-    verifyActiveView, 
-    addMedia,
-    clickMediaItem,
-    fetchMetadata,
-    confirmMerge,
-    getDescription,
-    getExtraField,
-    toggleImportCheckbox,
-    verifyDiffDisplayed
-} from '../helpers/interactions.js';
+    fetchMetadata, 
+    confirmMerge, 
+    toggleImportCheckbox, 
+    verifyDiffDisplayed 
+} from '../helpers/import.js';
+import { getDescription, getExtraField } from '../helpers/media-detail.js';
 
 describe('CUJ: Information Enrichment (Mocked Metadata Fetching)', () => {
     before(async () => {
@@ -41,14 +38,14 @@ describe('CUJ: Information Enrichment (Mocked Metadata Fetching)', () => {
         }, mockData);
 
         await $('#btn-add-extra').click();
-        await import('../helpers/interactions.js').then(m => m.submitPrompt('Conflicts'));
-        await import('../helpers/interactions.js').then(m => m.submitPrompt('Old value'));
+        await import('../helpers/common.js').then(m => m.submitPrompt('Conflicts'));
+        await import('../helpers/common.js').then(m => m.submitPrompt('Old value'));
 
         await $('#btn-add-extra').click();
-        await import('../helpers/interactions.js').then(m => m.submitPrompt('Stay'));
-        await import('../helpers/interactions.js').then(m => m.submitPrompt('Original'));
+        await import('../helpers/common.js').then(m => m.submitPrompt('Stay'));
+        await import('../helpers/common.js').then(m => m.submitPrompt('Original'));
 
-        await import('../helpers/interactions.js').then(m => m.editDescription('Old description'));
+        await import('../helpers/media-detail.js').then(m => m.editDescription('Old description'));
 
         await fetchMetadata('https://vndb.org/v17102');
 

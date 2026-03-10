@@ -1,13 +1,10 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { waitForAppReady } from '../helpers/setup.js';
-import { 
-    navigateTo, 
-    verifyActiveView, 
-    resolveConflicts, 
-    isMediaVisible,
-    dismissAlert
-} from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { resolveConflicts } from '../helpers/import.js';
+import { isMediaVisible } from '../helpers/library.js';
+import { dismissAlert } from '../helpers/common.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, '..', 'fixtures');

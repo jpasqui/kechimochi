@@ -1,5 +1,6 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import { navigateTo, verifyActiveView, dismissAlert } from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { dismissAlert } from '../helpers/common.js';
 
 describe('CUJ: Reading Analysis (Report Card)', () => {
   before(async () => {

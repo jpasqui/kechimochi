@@ -1,5 +1,6 @@
 import { waitForAppReady } from '../helpers/setup.js';
-import { navigateTo, verifyActiveView, takeAndCompareScreenshot } from '../helpers/interactions.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
+import { takeAndCompareScreenshot } from '../helpers/common.js';
 
 describe('CUJ: User Personalization', () => {
   before(async () => {

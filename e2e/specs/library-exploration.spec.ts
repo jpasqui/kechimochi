@@ -1,12 +1,12 @@
 import { waitForAppReady } from '../helpers/setup.js';
+import { navigateTo } from '../helpers/navigation.js';
 import { 
-    navigateTo, 
     setSearchQuery, 
     setMediaTypeFilter, 
     setTrackingStatusFilter, 
     setHideArchived, 
     isMediaVisible 
-} from '../helpers/interactions.js';
+} from '../helpers/library.js';
 
 describe('CUJ: Library Exploration (Search & Filter)', () => {
     before(async () => {

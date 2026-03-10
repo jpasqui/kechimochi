@@ -1,12 +1,11 @@
 import { waitForAppReady } from '../helpers/setup.js';
+import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
 import { 
-    navigateTo, 
-    verifyActiveView, 
     getStatValue,
     deleteMostRecentLog,
     getHeatmapCellColor,
     logActivityGlobal
-} from '../helpers/interactions.js';
+} from '../helpers/dashboard.js';
 
 describe('CUJ: Activity Feedback Loop (Dashboard Management)', () => {
     before(async () => {
