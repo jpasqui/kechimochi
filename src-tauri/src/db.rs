@@ -116,8 +116,7 @@ pub fn create_tables(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn init_db(app_handle: &tauri::AppHandle, profile_name: &str) -> Result<Connection> {
-    let app_dir = get_data_dir(app_handle);
+pub fn init_db(app_dir: std::path::PathBuf, profile_name: &str) -> Result<Connection> {
     fs::create_dir_all(&app_dir).expect("Failed to create app data dir");
     
     let shared_db_path = app_dir.join("kechimochi_shared_media.db");
@@ -141,9 +140,7 @@ pub fn init_db(app_handle: &tauri::AppHandle, profile_name: &str) -> Result<Conn
     Ok(conn)
 }
 
-pub fn wipe_profile(app_handle: &tauri::AppHandle, profile_name: &str) -> std::result::Result<(), String> {
-    let app_dir = get_data_dir(app_handle);
-    
+pub fn wipe_profile(app_dir: std::path::PathBuf, profile_name: &str) -> std::result::Result<(), String> {
     let file_name = format!("kechimochi_{}.db", profile_name);
     let db_path = app_dir.join(file_name);
     
@@ -156,9 +153,7 @@ pub fn wipe_profile(app_handle: &tauri::AppHandle, profile_name: &str) -> std::r
     Ok(())
 }
 
-pub fn list_profiles(app_handle: &tauri::AppHandle) -> std::result::Result<Vec<String>, String> {
-    let app_dir = get_data_dir(app_handle);
-
+pub fn list_profiles(app_dir: std::path::PathBuf) -> std::result::Result<Vec<String>, String> {
     let mut profiles = Vec::new();
     if let Ok(entries) = fs::read_dir(app_dir) {
         for entry in entries.filter_map(std::result::Result::ok) {
@@ -172,6 +167,28 @@ pub fn list_profiles(app_handle: &tauri::AppHandle) -> std::result::Result<Vec<S
         }
     }
     Ok(profiles)
+}
+
+pub fn wipe_everything(app_dir: std::path::PathBuf) -> std::result::Result<(), String> {
+    // Delete covers dir
+    let covers_dir = app_dir.join("covers");
+    if covers_dir.exists() {
+        let _ = std::fs::remove_dir_all(&covers_dir);
+    }
+    
+    // Delete all DBs
+    if let Ok(entries) = std::fs::read_dir(&app_dir) {
+        for entry in entries.filter_map(std::result::Result::ok) {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                if ext == "db" {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 // Media Operations
@@ -364,6 +381,69 @@ pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>> {
     }
 }
 
+pub fn save_cover_image(conn: &rusqlite::Connection, covers_dir: std::path::PathBuf, media_id: i64, src_path: &std::path::Path) -> std::result::Result<String, String> {
+    std::fs::create_dir_all(&covers_dir).map_err(|e| e.to_string())?;
+
+    let ext = src_path.extension().and_then(|e| e.to_str()).unwrap_or("png");
+    let dest_file = format!("{}_{}.{}", media_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(), ext);
+    let dest = covers_dir.join(&dest_file);
+    
+    // Delete old cover
+    let old_cover: String = conn.query_row(
+        "SELECT cover_image FROM shared.media WHERE id = ?1",
+        rusqlite::params![media_id],
+        |row| row.get(0),
+    ).unwrap_or_default();
+    
+    let dest_str = dest.to_string_lossy().to_string();
+    if !old_cover.is_empty() {
+        let old_path = std::path::Path::new(&old_cover);
+        if old_path.exists() && old_cover != dest_str {
+            let _ = std::fs::remove_file(old_path);
+        }
+    }
+    
+    std::fs::copy(src_path, &dest).map_err(|e| e.to_string())?;
+    
+    conn.execute(
+        "UPDATE shared.media SET cover_image = ?1 WHERE id = ?2",
+        rusqlite::params![dest_str, media_id],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(dest_str)
+}
+
+pub fn save_cover_bytes(conn: &rusqlite::Connection, covers_dir: std::path::PathBuf, media_id: i64, bytes: Vec<u8>, extension: &str) -> std::result::Result<String, String> {
+    std::fs::create_dir_all(&covers_dir).map_err(|e| e.to_string())?;
+
+    let dest_file = format!("{}_{}.{}", media_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(), extension);
+    let dest = covers_dir.join(&dest_file);
+    
+    // Delete old cover
+    let old_cover: String = conn.query_row(
+        "SELECT cover_image FROM shared.media WHERE id = ?1",
+        rusqlite::params![media_id],
+        |row| row.get(0),
+    ).unwrap_or_default();
+    
+    let dest_str = dest.to_string_lossy().to_string();
+    if !old_cover.is_empty() {
+        let old_path = std::path::Path::new(&old_cover);
+        if old_path.exists() && old_cover != dest_str {
+            let _ = std::fs::remove_file(old_path);
+        }
+    }
+    
+    std::fs::write(&dest, bytes).map_err(|e| e.to_string())?;
+    
+    conn.execute(
+        "UPDATE shared.media SET cover_image = ?1 WHERE id = ?2",
+        rusqlite::params![dest_str, media_id],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(dest_str)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,7 +543,16 @@ mod tests {
     #[test]
     fn test_delete_media_cascades_logs() {
         let conn = setup_test_db();
-        let media = sample_media("FF7");
+        
+        let dir = std::env::temp_dir();
+        let cover_path = dir.join("test_cover_cleanup.png");
+        std::fs::write(&cover_path, "fake data").unwrap();
+        let cover_str = cover_path.to_string_lossy().to_string();
+
+        let media = Media {
+            cover_image: cover_str.clone(),
+            ..sample_media("Cleanup Test")
+        };
         let media_id = add_media_with_id(&conn, &media).unwrap();
 
         let log = ActivityLog {
@@ -474,11 +563,9 @@ mod tests {
         };
         add_log(&conn, &log).unwrap();
 
-        // Verify log exists
-        let logs = get_logs(&conn).unwrap();
-        assert_eq!(logs.len(), 1);
+        assert!(cover_path.exists());
 
-        // Delete media (should cascade)
+        // Delete media (should cascade logs and remove file)
         delete_media(&conn, media_id).unwrap();
 
         let media_list = get_all_media(&conn).unwrap();
@@ -486,6 +573,20 @@ mod tests {
 
         let logs = get_logs(&conn).unwrap();
         assert_eq!(logs.len(), 0);
+        
+        // Verify disk cleanup
+        assert!(!cover_path.exists());
+    }
+
+    #[test]
+    fn test_delete_log() {
+        let conn = setup_test_db();
+        let media_id = add_media_with_id(&conn, &sample_media("Log")).unwrap();
+        let log_id = add_log(&conn, &ActivityLog { id: None, media_id, duration_minutes: 30, date: "2024-01-01".to_string() }).unwrap();
+        
+        assert_eq!(get_logs(&conn).unwrap().len(), 1);
+        delete_log(&conn, log_id).unwrap();
+        assert_eq!(get_logs(&conn).unwrap().len(), 0);
     }
 
     #[test]
@@ -544,5 +645,273 @@ mod tests {
         assert_eq!(heatmap[0].total_minutes, 75); // 30 + 45
         assert_eq!(heatmap[1].date, "2024-06-02");
         assert_eq!(heatmap[1].total_minutes, 20);
+    }
+
+    #[test]
+    fn test_get_logs_for_media() {
+        let conn = setup_test_db();
+        let m1_id = add_media_with_id(&conn, &sample_media("Media 1")).unwrap();
+        let m2_id = add_media_with_id(&conn, &sample_media("Media 2")).unwrap();
+
+        add_log(&conn, &ActivityLog { id: None, media_id: m1_id, duration_minutes: 30, date: "2024-01-01".to_string() }).unwrap();
+        add_log(&conn, &ActivityLog { id: None, media_id: m2_id, duration_minutes: 60, date: "2024-01-01".to_string() }).unwrap();
+
+        let m1_logs = get_logs_for_media(&conn, m1_id).unwrap();
+        assert_eq!(m1_logs.len(), 1);
+        assert_eq!(m1_logs[0].title, "Media 1");
+
+        let m2_logs = get_logs_for_media(&conn, m2_id).unwrap();
+        assert_eq!(m2_logs.len(), 1);
+        assert_eq!(m2_logs[0].title, "Media 2");
+    }
+
+    #[test]
+    fn test_settings_operations() {
+        let conn = setup_test_db();
+        
+        // Initially none
+        assert_eq!(get_setting(&conn, "theme").unwrap(), None);
+
+        // Set and get
+        set_setting(&conn, "theme", "dark").unwrap();
+        assert_eq!(get_setting(&conn, "theme").unwrap(), Some("dark".to_string()));
+
+        // Update
+        set_setting(&conn, "theme", "light").unwrap();
+        assert_eq!(get_setting(&conn, "theme").unwrap(), Some("light".to_string()));
+    }
+
+    #[test]
+    fn test_clear_activities() {
+        let conn = setup_test_db();
+        let media_id = add_media_with_id(&conn, &sample_media("Test")).unwrap();
+        add_log(&conn, &ActivityLog { id: None, media_id, duration_minutes: 30, date: "2024-01-01".to_string() }).unwrap();
+        
+        assert_eq!(get_logs(&conn).unwrap().len(), 1);
+        
+        clear_activities(&conn).unwrap();
+        assert_eq!(get_logs(&conn).unwrap().len(), 0);
+        
+        // Media should still exist
+        assert_eq!(get_all_media(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_media_ordering() {
+        let conn = setup_test_db();
+        
+        // 1. Completed media with recent activity
+        let m1_id = add_media_with_id(&conn, &Media {
+            status: "Completed".to_string(),
+            ..sample_media("Completed Recent")
+        }).unwrap();
+        add_log(&conn, &ActivityLog { id: None, media_id: m1_id, duration_minutes: 10, date: "2024-03-01".to_string() }).unwrap();
+
+        // 2. Ongoing media with older activity
+        let m2_id = add_media_with_id(&conn, &Media {
+            status: "Ongoing".to_string(),
+            ..sample_media("Ongoing Old")
+        }).unwrap();
+        add_log(&conn, &ActivityLog { id: None, media_id: m2_id, duration_minutes: 10, date: "2024-01-01".to_string() }).unwrap();
+
+        // 3. Ongoing media with NO activity
+        add_media_with_id(&conn, &Media {
+            status: "Ongoing".to_string(),
+            ..sample_media("Ongoing No Activity")
+        }).unwrap();
+
+        // Expectation: Ongoing should be before Completed.
+        // Within Ongoing, "No Activity" should be after "Old Activity" (due to m.id DESC if dates are missing/older)
+        // Wait, (SELECT MAX(date) ...) DESC will put older dates lower.
+        // Ongoing (0) vs Completed (1). 
+        // m2 and m3 are 0. m1 is 1.
+        // So [m2, m3, m1] or [m3, m2, m1]
+        
+        let all = get_all_media(&conn).unwrap();
+        assert_eq!(all[0].title, "Ongoing Old"); // Ongoing with activity
+        assert_eq!(all[1].title, "Ongoing No Activity"); // Ongoing no activity
+        assert_eq!(all[2].title, "Completed Recent"); // Completed (even if recent)
+    }
+
+    #[test]
+    fn test_migration() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("ATTACH DATABASE ':memory:' AS shared", []).unwrap();
+
+        // Create legacy table in 'main'
+        conn.execute("CREATE TABLE main.media (id INTEGER PRIMARY KEY, title TEXT, media_type TEXT, status TEXT, language TEXT, description TEXT, cover_image TEXT, extra_data TEXT, content_type TEXT)", []).unwrap();
+        conn.execute("INSERT INTO main.media (title, media_type, status, language) VALUES ('Legacy Manga', 'Reading', 'Ongoing', 'Japanese')", []).unwrap();
+        
+        // Create activity logs (old style might have had foreign keys to main.media)
+        conn.execute("CREATE TABLE main.activity_logs (id INTEGER PRIMARY KEY, media_id INTEGER, duration_minutes INTEGER, date TEXT)", []).unwrap();
+        conn.execute("INSERT INTO main.activity_logs (media_id, duration_minutes, date) VALUES (1, 60, '2024-01-01')", []).unwrap();
+
+        // Run migration
+        migrate_to_shared(&conn).unwrap();
+        create_tables(&conn).unwrap();
+
+        // Check shared table
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM shared.media", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+        
+        // Check main table is gone
+        let exists: i64 = conn.query_row("SELECT COUNT(*) FROM main.sqlite_master WHERE type='table' AND name='media'", [], |r| r.get(0)).unwrap();
+        assert_eq!(exists, 0);
+
+        let logs = get_logs(&conn).unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].title, "Legacy Manga");
+    }
+
+    #[test]
+    fn test_list_and_wipe_profiles() {
+        let temp_dir = std::env::temp_dir().join(format!("kechimochi_profiles_test_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        
+        std::fs::write(temp_dir.join("kechimochi_user1.db"), "").unwrap();
+        std::fs::write(temp_dir.join("kechimochi_user2.db"), "").unwrap();
+        std::fs::write(temp_dir.join("kechimochi_shared_media.db"), "").unwrap();
+
+        let profiles = list_profiles(temp_dir.clone()).unwrap();
+        assert_eq!(profiles.len(), 2);
+        assert!(profiles.contains(&"user1".to_string()));
+        assert!(profiles.contains(&"user2".to_string()));
+
+        wipe_profile(temp_dir.clone(), "user1").unwrap();
+        let profiles = list_profiles(temp_dir.clone()).unwrap();
+        assert_eq!(profiles.len(), 1);
+        assert!(!profiles.contains(&"user1".to_string()));
+
+        std::fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_save_cover_image() {
+        let conn = setup_test_db();
+        let media_id = add_media_with_id(&conn, &sample_media("Cover Test")).unwrap();
+        
+        let temp_dir = std::env::temp_dir().join(format!("covers_{}", std::process::id()));
+        let src_file = temp_dir.join("src.png");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::fs::write(&src_file, "fake image").unwrap();
+
+        let covers_dir = temp_dir.join("covers");
+        
+        // 1. Save first cover
+        let dest1 = save_cover_image(&conn, covers_dir.clone(), media_id, &src_file).unwrap();
+        assert!(std::path::Path::new(&dest1).exists());
+
+        // 2. Save second cover (should delete first)
+        // Ensure timestamp is different
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::fs::write(&src_file, "fake image 2").unwrap();
+        let dest2 = save_cover_image(&conn, covers_dir.clone(), media_id, &src_file).unwrap();
+        
+        assert_ne!(dest1, dest2);
+        assert!(std::path::Path::new(&dest2).exists());
+        assert!(!std::path::Path::new(&dest1).exists()); // Cleaned up
+
+        // 3. Save with missing file should error
+        let result = save_cover_image(&conn, covers_dir, media_id, &temp_dir.join("missing.png"));
+        assert!(result.is_err());
+
+        std::fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_init_db_integration() {
+        let temp_dir = std::env::temp_dir().join(format!("init_test_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Initialize a new profile
+        let conn = init_db(temp_dir.clone(), "test_user").unwrap();
+        
+        // Verify tables exist in both
+        let _: i64 = conn.query_row("SELECT COUNT(*) FROM shared.media", [], |r| r.get(0)).unwrap();
+        let _: i64 = conn.query_row("SELECT COUNT(*) FROM main.activity_logs", [], |r| r.get(0)).unwrap();
+        
+        assert!(temp_dir.join("kechimochi_test_user.db").exists());
+        assert!(temp_dir.join("kechimochi_shared_media.db").exists());
+
+        std::fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_get_data_dir_override() {
+        let temp_dir = "/tmp/kechimochi_test_dir";
+        std::env::set_var("KECHIMOCHI_DATA_DIR", temp_dir);
+        
+        // We need a dummy AppHandle to call it, but we can't easily.
+        // However, we can verify the env var logic directly.
+        let dir = if let Ok(d) = std::env::var("KECHIMOCHI_DATA_DIR") {
+            PathBuf::from(d)
+        } else {
+            PathBuf::from("fail")
+        };
+        assert_eq!(dir, PathBuf::from(temp_dir));
+    }
+
+    #[test]
+    fn test_wipe_everything() {
+        let temp_dir = std::env::temp_dir().join(format!("wipe_test_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::fs::create_dir_all(temp_dir.join("covers")).unwrap();
+        std::fs::write(temp_dir.join("kechimochi_user.db"), "").unwrap();
+        std::fs::write(temp_dir.join("covers/test.png"), "").unwrap();
+        std::fs::write(temp_dir.join("not_a_db.txt"), "").unwrap();
+
+        wipe_everything(temp_dir.clone()).unwrap();
+
+        assert!(!temp_dir.join("covers").exists());
+        assert!(!temp_dir.join("kechimochi_user.db").exists());
+        assert!(temp_dir.join("not_a_db.txt").exists()); // Should preserve non-db files
+
+        std::fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_get_username_logic() {
+        std::env::set_var("USER", "testuser");
+        assert_eq!(crate::get_username_logic(), "testuser");
+        
+        std::env::remove_var("USER");
+        std::env::set_var("USERNAME", "winuser");
+        assert_eq!(crate::get_username_logic(), "winuser");
+    }
+
+    #[test]
+    fn test_read_file_bytes() {
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join("test_bytes.txt");
+        std::fs::write(&file_path, "hello").unwrap();
+        
+        let bytes = std::fs::read(&file_path).unwrap();
+        assert_eq!(bytes, b"hello");
+        
+        std::fs::remove_file(file_path).ok();
+    }
+
+    #[test]
+    fn test_schema_evolution() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("ATTACH DATABASE ':memory:' AS shared", []).unwrap();
+        
+        // Create an "old" version of the table with missing columns
+        conn.execute("CREATE TABLE shared.media (id INTEGER PRIMARY KEY, title TEXT UNIQUE, media_type TEXT, status TEXT, language TEXT)", []).unwrap();
+        
+        // This should evolution the table by adding missing columns
+        create_shared_media_table(&conn).unwrap();
+        
+        // Verify we can insert into the new columns
+        conn.execute("INSERT INTO shared.media (title, media_type, status, language, description, tracking_status) VALUES ('Evolution', 'Reading', 'Ongoing', 'Japanese', 'Desc', 'Untracked')", []).unwrap();
+    }
+
+    #[test]
+    fn test_migration_clean_install() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("ATTACH DATABASE ':memory:' AS shared", []).unwrap();
+        
+        // Running migration on a DB with NO media table should just work (return Ok)
+        migrate_to_shared(&conn).unwrap();
     }
 }

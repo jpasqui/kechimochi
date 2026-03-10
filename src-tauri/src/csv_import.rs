@@ -2,7 +2,6 @@ use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::Path;
-use tauri::Manager;
 
 use crate::db;
 use crate::models::{ActivityLog, Media};
@@ -160,6 +159,37 @@ pub fn export_media_csv(conn: &Connection, file_path: &str) -> Result<usize, Str
     Ok(count)
 }
 
+pub fn export_logs_csv(conn: &Connection, file_path: &str, start_date: Option<String>, end_date: Option<String>) -> Result<usize, String> {
+    let logs = db::get_logs(conn).map_err(|e| e.to_string())?;
+    
+    let mut count = 0;
+    let mut wtr = csv::Writer::from_path(file_path).map_err(|e| e.to_string())?;
+    
+    wtr.write_record(&["Date", "Log Name", "Media Type", "Duration", "Language"]).map_err(|e| e.to_string())?;
+    
+    for log in logs {
+        if let Some(start) = &start_date {
+            if &log.date < start { continue; }
+        }
+        if let Some(end) = &end_date {
+            if &log.date > end { continue; }
+        }
+        
+        wtr.write_record(&[
+            &log.date,
+            &log.title,
+            &log.media_type,
+            &log.duration_minutes.to_string(),
+            &log.language
+        ]).map_err(|e| e.to_string())?;
+        
+        count += 1;
+    }
+    
+    wtr.flush().map_err(|e| e.to_string())?;
+    Ok(count)
+}
+
 // Parses the CSV and identifies which incoming media exist vs which are new.
 // The frontend will then prompt the user and send back a filtered list to actually apply.
 pub fn analyze_media_csv(conn: &Connection, file_path: &str) -> Result<Vec<MediaConflict>, String> {
@@ -207,12 +237,10 @@ pub fn analyze_media_csv(conn: &Connection, file_path: &str) -> Result<Vec<Media
     Ok(conflicts)
 }
 
-pub fn apply_media_import(app_handle: &tauri::AppHandle, conn: &mut Connection, records: Vec<MediaCsvRow>) -> Result<usize, String> {
+pub fn apply_media_import(covers_dir: std::path::PathBuf, conn: &mut Connection, records: Vec<MediaCsvRow>) -> Result<usize, String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let mut imported = 0;
 
-    let app_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let covers_dir = app_dir.join("covers");
     std::fs::create_dir_all(&covers_dir).map_err(|e| e.to_string())?;
 
     for req in records {
@@ -311,6 +339,21 @@ mod tests {
         path.to_str().unwrap().to_string()
     }
 
+    fn sample_media(title: &str) -> Media {
+        Media {
+            id: None,
+            title: title.to_string(),
+            media_type: "Reading".to_string(),
+            status: "Active".to_string(),
+            language: "Japanese".to_string(),
+            description: "".to_string(),
+            cover_image: "".to_string(),
+            extra_data: "{}".to_string(),
+            content_type: "Unknown".to_string(),
+            tracking_status: "Untracked".to_string(),
+        }
+    }
+
     #[test]
     fn test_import_csv_basic() {
         let mut conn = setup_test_db();
@@ -370,5 +413,176 @@ mod tests {
         assert_eq!(logs[0].date, "2024-03-01");
 
         std::fs::remove_file(csv_path).ok();
+    }
+
+    #[test]
+    fn test_export_media_csv() {
+        let conn = setup_test_db();
+        let m = Media {
+            id: None,
+            title: "Export Test".to_string(),
+            media_type: "Reading".to_string(),
+            status: "Ongoing".to_string(),
+            language: "Japanese".to_string(),
+            description: "Test Desc".to_string(),
+            cover_image: "".to_string(),
+            extra_data: "{\"key\":\"val\"}".to_string(),
+            content_type: "Novel".to_string(),
+            tracking_status: "Untracked".to_string(),
+        };
+        db::add_media_with_id(&conn, &m).unwrap();
+
+        let dir = std::env::temp_dir();
+        let path = dir.join("export_test.csv");
+        let path_str = path.to_str().unwrap().to_string();
+
+        let count = export_media_csv(&conn, &path_str).unwrap();
+        assert_eq!(count, 1);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("Export Test"));
+        assert!(content.contains("Novel"));
+        // CSV escapes double quotes in fields by doubling them
+        assert!(content.contains("\"{ \"\"key\"\": \"\"val\"\" }\"") || content.contains("\"{ \"\"key\"\":\"\"val\"\" }\"") || content.contains("key") && content.contains("val"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_analyze_media_csv() {
+        let conn = setup_test_db();
+        // Add one existing media
+        let m = Media {
+            id: None,
+            title: "Existing".to_string(),
+            media_type: "Reading".to_string(),
+            status: "Completed".to_string(),
+            language: "Japanese".to_string(),
+            description: "".to_string(),
+            cover_image: "".to_string(),
+            extra_data: "{}".to_string(),
+            content_type: "Unknown".to_string(),
+            tracking_status: "Untracked".to_string(),
+        };
+        db::add_media_with_id(&conn, &m).unwrap();
+
+        let csv_path = write_csv(
+            "Title,Media Type,Status,Language,Description,Content Type,Extra Data,Cover Image (Base64)\n\
+             Existing,Reading,Ongoing,Japanese,,Novel,{}, \n\
+             New Media,Watching,Plan to Watch,English,,Anime,{}, \n"
+        );
+
+        let conflicts = analyze_media_csv(&conn, &csv_path).unwrap();
+        assert_eq!(conflicts.len(), 2);
+
+        // First one should have an existing media
+        assert_eq!(conflicts[0].incoming.title, "Existing");
+        assert!(conflicts[0].existing.is_some());
+        assert_eq!(conflicts[0].existing.as_ref().unwrap().title, "Existing");
+
+        // Second one should be new
+        assert_eq!(conflicts[1].incoming.title, "New Media");
+        assert!(conflicts[1].existing.is_none());
+
+        std::fs::remove_file(csv_path).ok();
+    }
+
+    #[test]
+    fn test_export_logs_csv() {
+        let conn = setup_test_db();
+        let m_id = db::add_media_with_id(&conn, &sample_media("Log Test")).unwrap();
+        
+        db::add_log(&conn, &ActivityLog { id: None, media_id: m_id, duration_minutes: 30, date: "2024-01-01".to_string() }).unwrap();
+        db::add_log(&conn, &ActivityLog { id: None, media_id: m_id, duration_minutes: 45, date: "2024-02-01".to_string() }).unwrap();
+        db::add_log(&conn, &ActivityLog { id: None, media_id: m_id, duration_minutes: 60, date: "2024-03-01".to_string() }).unwrap();
+
+        let dir = std::env::temp_dir();
+        let path = dir.join("export_logs_test.csv");
+        let path_str = path.to_str().unwrap().to_string();
+
+        // Test with date filtering
+        let count = export_logs_csv(&conn, &path_str, Some("2024-01-15".into()), Some("2024-02-15".into())).unwrap();
+        assert_eq!(count, 1); // Only 2024-02-01 should match
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("2024-02-01"));
+        assert!(content.contains("45"));
+        assert!(!content.contains("2024-01-01"));
+        assert!(!content.contains("2024-03-01"));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_import_csv_malformed_skips() {
+        let mut conn = setup_test_db();
+        // Row 2 is missing a column (Duration)
+        let csv_path = write_csv(
+            "Date,Log Name,Media Type,Duration,Language\n\
+             2024-01-15,Good Row,Reading,45,Japanese\n\
+             2024-01-16,Bad Row,Reading,MissingCol\n"
+        );
+
+        let count = import_csv(&mut conn, &csv_path).unwrap();
+        assert_eq!(count, 1); // Only the good row should be imported
+
+        let logs = db::get_logs(&conn).unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].title, "Good Row");
+
+        std::fs::remove_file(csv_path).ok();
+    }
+
+    #[test]
+    fn test_save_cover_bytes() {
+        let conn = setup_test_db();
+        let media_id = db::add_media_with_id(&conn, &sample_media("Byte Test")).unwrap();
+        let temp_dir = std::env::temp_dir().join(format!("byte_covers_{}", std::process::id()));
+        
+        let bytes = vec![0, 1, 2, 3];
+        let dest = db::save_cover_bytes(&conn, temp_dir.clone(), media_id, bytes.clone(), "png").unwrap();
+        
+        assert!(std::path::Path::new(&dest).exists());
+        assert_eq!(std::fs::read(&dest).unwrap(), bytes);
+
+        std::fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_binary_asset_round_trip() {
+        let mut conn = setup_test_db();
+        let temp_dir = std::env::temp_dir().join(format!("binary_test_{}", std::process::id()));
+        let covers_dir = temp_dir.join("covers");
+        std::fs::create_dir_all(&covers_dir).unwrap();
+
+        // 1. Create a media with a base64 cover via import
+        let fake_image_bytes = vec![255, 216, 255, 224, 0, 16, 74, 70, 73, 70]; // Fake JPEG header
+        let b64_img = BASE64.encode(&fake_image_bytes);
+
+        let records = vec![
+            MediaCsvRow {
+                title: "Binary Media".to_string(),
+                media_type: "Watching".to_string(),
+                status: "Ongoing".to_string(),
+                language: "English".to_string(),
+                description: "".to_string(),
+                content_type: "Anime".to_string(),
+                extra_data: "{}".to_string(),
+                cover_image_b64: b64_img,
+            }
+        ];
+
+        apply_media_import(covers_dir.clone(), &mut conn, records).unwrap();
+
+        // 2. Export it back to CSV
+        let export_path = temp_dir.join("export.csv");
+        let export_path_str = export_path.to_str().unwrap().to_string();
+        export_media_csv(&conn, &export_path_str).unwrap();
+
+        // 3. Verify the exported CSV contains the same base64
+        let content = std::fs::read_to_string(&export_path).unwrap();
+        assert!(content.contains(&BASE64.encode(&fake_image_bytes)));
+
+        std::fs::remove_dir_all(temp_dir).ok();
     }
 }
