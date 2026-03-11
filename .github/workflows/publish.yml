@@ -48,17 +48,17 @@ jobs:
           SHA_SHORT=$(git rev-parse --short HEAD)
           VERSION="0.0.0-dev.${SHA_SHORT}"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          
+
           # Update package.json version
           jq ".version = \"$VERSION\"" package.json > package.json.tmp && mv package.json.tmp package.json
-          
+
           # Update tauri.conf.json version
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
-          
+
           echo "Building version $VERSION"
 
       - name: build tauri app
-        uses: tauri-apps/tauri-action@v2
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_STRIP: true
