@@ -144,12 +144,10 @@ jobs:
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
       - name: build tauri app
-        run: npm run tauri build -- --bundles msi,exe --verbose
+        run: npm run tauri build -- --bundles msi --verbose
 
       - name: upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: kechimochi-windows-${{ steps.versioning.outputs.VERSION }}
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/exe/*.exe
+          path: src-tauri/target/release/bundle/msi/*.msi
