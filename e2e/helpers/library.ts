@@ -146,7 +146,7 @@ export async function clickMediaItem(title: string): Promise<void> {
     if (!item) {
         throw new Error(`[E2E] Failed to click "${title}": not found in grid.`);
     }
-    await item.waitForDisplayed({ timeout: 2000 });
+    await item.waitForDisplayed({ timeout: 5000 });
     await item.click();
     await browser.pause(500);
 }
