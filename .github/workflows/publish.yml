@@ -41,6 +41,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             jq
+          cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage
 
       - name: Set dynamic version
         id: versioning
@@ -52,12 +53,10 @@ jobs:
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
       - name: build tauri app
-        uses: tauri-apps/tauri-action@v0
+        working-directory: ./src-tauri
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NO_STRIP is disabled for Ubuntu as it's not needed there
-        with:
-          args: --bundles appimage
+          TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: 1
+        run: cargo tauri build --bundles appimage --verbose
 
       - name: upload artifact
         uses: actions/upload-artifact@v4

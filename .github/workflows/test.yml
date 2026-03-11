@@ -3,8 +3,24 @@ name: "Test"
 on:
   push:
     branches: [ "main", "setup-ci" ]
+    paths:
+      - 'e2e/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'public/**'
+      - 'src/**'
+      - '.github/workflows/*.yml'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'e2e/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'public/**'
+      - 'src/**'
+      - '.github/workflows/*.yml'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
