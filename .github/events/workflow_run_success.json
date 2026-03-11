@@ -1,0 +1,7 @@
+{
+  "workflow_run": {
+    "conclusion": "success",
+    "head_branch": "main",
+    "head_sha": "main"
+  }
+}
