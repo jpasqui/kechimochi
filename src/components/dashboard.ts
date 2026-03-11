@@ -118,6 +118,9 @@ export class Dashboard extends Component<DashboardState> {
         }
 
         this.clear();
+        this.statsComponent = null;
+        this.heatmapComponent = null;
+        
         const root = html`<div class="dashboard-root animate-fade-in" style="display: flex; flex-direction: column; gap: 2rem;"></div>`;
         this.container.appendChild(root);
 
