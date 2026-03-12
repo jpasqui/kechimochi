@@ -255,7 +255,7 @@ export class MediaDetail extends Component<MediaDetailState> {
 
             return `
                 <div class="card" style="padding: 0.5rem 1rem; position: relative;" data-ekey="${k}">
-                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">${k}</div>
+                    <div class="editable-extra-key" data-key="${k}" title="Double click to rename field" style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer;">${k}</div>
                     <div class="editable-extra" data-key="${k}" title="Double click to edit" style="cursor: pointer; font-weight: 500;">${v || '-'}</div>
                     <div class="delete-extra-btn" data-key="${k}" title="Delete field" style="position: absolute; top: 0.5rem; right: 0.5rem; cursor: pointer; color: var(--accent-red); font-size: 0.8rem; font-weight: bold; opacity: 0.6;">&times;</div>
                     ${refreshBtn}
@@ -362,43 +362,98 @@ export class MediaDetail extends Component<MediaDetailState> {
             if (jitenUrl) await this.performMetadataImport(jitenUrl, "Jiten Source");
         });
 
-        const makeEditable = (selector: string, field: keyof Media, isTextArea: boolean = false) => {
-            const el = root.querySelector(selector) as HTMLElement;
-            if (!el) return;
+        const onSave = async (field: keyof Media | string, value: string, isExtra: boolean = false) => {
+            if (isExtra) {
+                let extraData = JSON.parse(this.state.media.extra_data || "{}");
+                extraData[field as string] = value;
+                this.state.media.extra_data = JSON.stringify(extraData);
+            } else {
+                (this.state.media as any)[field] = value;
+            }
+            await updateMedia(this.state.media);
+            this.render();
+        };
+
+        const onRenameKey = async (oldKey: string, newKey: string) => {
+            if (!newKey || newKey === oldKey) {
+                this.render();
+                return;
+            }
+            let extraData = JSON.parse(this.state.media.extra_data || "{}");
+            const val = extraData[oldKey];
+            delete extraData[oldKey];
+            extraData[newKey] = val;
+            this.state.media.extra_data = JSON.stringify(extraData);
+            await updateMedia(this.state.media);
+            this.render();
+        };
+
+        const setupEditable = (el: HTMLElement, field: string, options: { isExtra?: boolean, isTextArea?: boolean, isRenameKey?: boolean } = {}) => {
             el.addEventListener('dblclick', () => {
-                const currentVal = (this.state.media[field] as string) || '';
-                const input = document.createElement(isTextArea ? 'textarea' : 'input');
+                const currentVal = options.isRenameKey ? field : (options.isExtra ? (el.textContent === '-' ? '' : el.textContent) : (this.state.media[field as keyof Media] as string) || '');
+                const input = document.createElement(options.isTextArea ? 'textarea' : 'input');
+                if (!options.isTextArea) (input as HTMLInputElement).type = 'text';
                 input.className = 'edit-input';
-                input.value = currentVal;
+                input.value = currentVal || '';
                 input.style.width = '100%';
-                if (isTextArea) {
+                if (options.isTextArea) {
                     input.style.height = '150px';
                     input.style.resize = 'vertical';
                 }
                 input.style.background = 'var(--bg-dark)';
-                input.style.color = 'var(--text-primary)';
+                input.style.color = (options.isRenameKey || options.isExtra) ? 'var(--text-secondary)' : 'var(--text-primary)';
+                if (!options.isRenameKey && !options.isExtra && !options.isTextArea) input.style.color = 'var(--text-primary)';
+                else if (!options.isTextArea) input.style.color = 'var(--text-secondary)';
+                
+                // Set default color for non-rename
+                if (!options.isRenameKey && !options.isTextArea) input.style.color = 'var(--text-primary)';
+
                 input.style.border = '1px solid var(--accent-green)';
-                input.style.padding = '0.5rem';
+                input.style.padding = '0.2rem 0.5rem';
+                input.style.fontSize = options.isRenameKey ? '0.7rem' : 'inherit';
+                if (options.isRenameKey) input.style.textTransform = 'uppercase';
 
                 const save = async () => {
                     const newVal = input.value.trim();
-                    (this.state.media as any)[field] = newVal;
-                    await updateMedia(this.state.media);
-                    this.render();
+                    if (options.isRenameKey) {
+                        await onRenameKey(field, newVal);
+                    } else {
+                        await onSave(field, newVal, !!options.isExtra);
+                    }
                 };
 
                 input.addEventListener('blur', save);
                 input.addEventListener('keydown', ((ev: KeyboardEvent) => {
-                    if (ev.key === 'Enter' && !isTextArea) (ev.target as HTMLInputElement).blur();
+                    if (ev.key === 'Enter' && !options.isTextArea) input.blur();
+                    if (ev.key === 'Escape') {
+                        input.removeEventListener('blur', save);
+                        this.render();
+                    }
                 }) as EventListener);
 
                 el.replaceWith(input);
                 input.focus();
+                if (!options.isTextArea) (input as HTMLInputElement).select();
             });
         };
 
-        makeEditable('#media-title', 'title', false);
-        makeEditable('#media-desc', 'description', true);
+        const titleEl = root.querySelector('#media-title') as HTMLElement;
+        if (titleEl) setupEditable(titleEl, 'title');
+
+        const descEl = root.querySelector('#media-desc') as HTMLElement;
+        if (descEl) setupEditable(descEl, 'description', { isTextArea: true });
+
+        // Extra fields values
+        root.querySelectorAll('.editable-extra').forEach(el => {
+            const key = (el as HTMLElement).getAttribute('data-key');
+            if (key) setupEditable(el as HTMLElement, key, { isExtra: true });
+        });
+
+        // Extra fields keys (renaming)
+        root.querySelectorAll('.editable-extra-key').forEach(el => {
+            const key = (el as HTMLElement).getAttribute('data-key');
+            if (key) setupEditable(el as HTMLElement, key, { isRenameKey: true });
+        });
 
         root.querySelector('#media-tracking-status')?.addEventListener('change', async (e) => {
             this.state.media.tracking_status = (e.target as HTMLSelectElement).value;

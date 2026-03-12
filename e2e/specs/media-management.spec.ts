@@ -2,6 +2,8 @@ import { waitForAppReady } from '../helpers/setup.js';
 import { verifyActiveView } from '../helpers/navigation.js';
 import { addMedia } from '../helpers/library.js';
 import { logActivity } from '../helpers/dashboard.js';
+import { addExtraField, editExtraField, getExtraField } from '../helpers/media-detail.js';
+import { submitPrompt } from '../helpers/common.js';
 
 describe('Media Management CUJs', () => {
   before(async () => {
@@ -50,6 +52,33 @@ describe('Media Management CUJs', () => {
 
       const statusLabel = await $(`.media-grid-item[data-title="Cyberpunk 2077"] .status-ongoing`);
       expect(await statusLabel.isExisting()).toBe(true);
+    });
+
+    it('should add an extra field and edit it via double-click', async () => {
+        // We are already in detail view for Cyberpunk 2077 from previous test
+        // but just in case, let's make sure we are there
+        const detailTitle = await $('#media-title');
+        if (!(await detailTitle.isDisplayed()) || (await detailTitle.getText()) !== 'Cyberpunk 2077') {
+             const gridItem = await $(`.media-grid-item[data-title="Cyberpunk 2077"]`);
+             await gridItem.waitForDisplayed({ timeout: 5000 });
+             await gridItem.click();
+        }
+
+        const fieldKey = 'TestField';
+        const initialValue = 'InitialValue';
+        const updatedValue = 'UpdatedValue';
+
+        // 1. Add a random extra field
+        await addExtraField(fieldKey, initialValue);
+
+        // 2. Verify it's added
+        expect(await getExtraField(fieldKey)).toBe(initialValue);
+
+        // 3. Double-click and change its value
+        await editExtraField(fieldKey, updatedValue);
+
+        // 4. Verify it's updated
+        expect(await getExtraField(fieldKey)).toBe(updatedValue);
     });
   });
 

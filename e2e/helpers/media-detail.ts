@@ -130,23 +130,9 @@ export async function getDescription(): Promise<string> {
 export async function getExtraField(key: string): Promise<string> {
     const el = await $(`.editable-extra[data-key="${key}"]`);
     await el.waitForExist({ timeout: 5000 });
-    
-    let text = "";
-    await browser.waitUntil(async () => {
-        text = await el.getText();
-        return text !== "" && text !== "-";
-    }, {
-        timeout: 5000,
-        interval: 100,
-        timeoutMsg: `Extra field "${key}" never showed a value`
-    }).catch(() => {});
-    
     return await el.getText();
 }
 
-/**
- * Adds an extra field to the current media item.
- */
 export async function addExtraField(key: string, value: string): Promise<void> {
     const btn = await $('#btn-add-extra');
     await btn.waitForDisplayed({ timeout: 5000 });
@@ -158,6 +144,43 @@ export async function addExtraField(key: string, value: string): Promise<void> {
     await submitPrompt(value);
     
     await browser.pause(500); // Wait for re-render
+}
+
+/**
+ * Edits an extra field value via double-click.
+ */
+export async function editExtraField(key: string, newValue: string): Promise<void> {
+    const card = await $(`.card[data-ekey="${key}"]`);
+    await card.waitForDisplayed({ timeout: 5000 });
+    
+    const el = await card.$(`.editable-extra[data-key="${key}"]`);
+    await el.waitForDisplayed({ timeout: 5000 });
+    await el.scrollIntoView();
+    
+    // Using double click
+    await el.doubleClick();
+    
+    // Wait for input to appear
+    const input = await card.$('input.edit-input');
+    await input.waitForDisplayed({ timeout: 5000 });
+    
+    // Click to focus and use keys to set value
+    await input.click();
+    
+    // Clear existing value if any (though it should be empty or InitialValue replaced)
+    // We can use Ctrl+A and Backspace
+    await browser.keys(['Control', 'a']);
+    await browser.keys(['Backspace']);
+    await browser.keys(newValue);
+    
+    // Verify value was set in the input before blurring
+    await browser.waitUntil(async () => {
+        return (await input.getValue()) === newValue;
+    }, { timeout: 3000, timeoutMsg: `Failed to set value to "${newValue}" in extra field "${key}"` });
+    
+    // Save by pressing Enter
+    await browser.keys(['Enter']);
+    await browser.pause(1500); // Wait for re-render
 }
 
 /**
