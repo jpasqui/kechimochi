@@ -9,10 +9,16 @@
  * (HTTP) adapter.
  */
 import type { AppServices } from './types';
+import { DesktopServices } from './desktop';
+import { WebServices } from './web';
 
 export type { AppServices };
 
 let _services: AppServices | null = null;
+
+function isVitestRuntime(): boolean {
+    return typeof process !== 'undefined' && Boolean(process.env?.VITEST);
+}
 
 function hasTauriRuntimeGlobals(): boolean {
     const w = window as any;
@@ -58,6 +64,8 @@ function isClearlyWebRuntime(): boolean {
 }
 
 async function detectDesktopRuntimeWithRetry(): Promise<boolean> {
+    if (isVitestRuntime()) return true;
+
     // In some startup races, Tauri globals appear shortly after DOMContentLoaded.
     if (isDesktopRuntime()) return true;
 
@@ -74,10 +82,19 @@ async function detectDesktopRuntimeWithRetry(): Promise<boolean> {
 
 export function getServices(): AppServices {
     if (!_services) {
-        throw new Error(
-            '[kechimochi] Services have not been initialised. ' +
-            'Make sure initServices() is awaited before anything else runs.'
-        );
+        // Test runs and browser mode may call APIs before app bootstrap.
+        // Provide a safe lazy default while preserving explicit init in app startup.
+        if (isVitestRuntime() || isDesktopRuntime()) {
+            _services = new DesktopServices();
+        } else if (isClearlyWebRuntime()) {
+            console.warn('[kechimochi] Services were accessed before init; using web adapter lazily');
+            _services = new WebServices();
+        } else {
+            throw new Error(
+                '[kechimochi] Services have not been initialised. ' +
+                'Make sure initServices() is awaited before anything else runs.'
+            );
+        }
     }
     return _services;
 }
@@ -85,11 +102,9 @@ export function getServices(): AppServices {
 export async function initServices(): Promise<AppServices> {
     const isDesktop = await detectDesktopRuntimeWithRetry();
     if (isDesktop) {
-        const { DesktopServices } = await import('./desktop');
         _services = new DesktopServices();
     } else {
         console.warn('[kechimochi] Desktop runtime not detected, using web services adapter');
-        const { WebServices } = await import('./web');
         _services = new WebServices();
     }
     return _services;

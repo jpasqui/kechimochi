@@ -908,7 +908,21 @@ input:checked + .slider:before {
   background-color: white;
 }
 
+/* Desktop media detail: keep full-height layout and shrink the cover image so
+   milestones remain visible without introducing a column scrollbar. */
+@media (min-width: 1025px) {
+  #media-cover-column {
+    overflow: hidden;
+    padding-right: 0;
+  }
+}
+
 @media (max-width: 1024px) {
+  #media-root {
+    height: auto !important;
+    min-height: 100%;
+  }
+
   .main-content {
     padding: 2rem 1rem 1rem;
   }
@@ -944,6 +958,8 @@ input:checked + .slider:before {
     flex-direction: column !important;
     gap: 0.75rem !important;
     padding-top: 220px;
+    overflow-y: auto !important;
+    overflow-x: hidden;
   }
 
   #media-cover-column {
@@ -1104,6 +1120,8 @@ input:checked + .slider:before {
   #media-content-area {
     gap: 0.65rem !important;
     padding-top: 180px;
+    overflow-y: auto !important;
+    overflow-x: hidden;
   }
 
   #media-cover-column {

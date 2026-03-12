@@ -1,6 +1,7 @@
 import { Component } from '../../core/component';
 import { html } from '../../core/html';
 import { Media } from '../../api';
+import { readFileBytes } from '../../api';
 import { getServices } from '../../services';
 
 interface MediaItemState {
@@ -35,7 +36,14 @@ export class MediaItem extends Component<MediaItemState> {
         }
 
         try {
-            const src = await getServices().loadCoverImage(cover_image);
+            let src: string | null = null;
+            if (getServices().isDesktop()) {
+                const bytes = await readFileBytes(cover_image);
+                const blob = new Blob([new Uint8Array(bytes)]);
+                src = URL.createObjectURL(blob);
+            } else {
+                src = await getServices().loadCoverImage(cover_image);
+            }
             if (!src) return;
             MediaItem.imageCache.set(cover_image, src);
             this.setState({ imgSrc: src });

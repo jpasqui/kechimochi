@@ -2,6 +2,8 @@
 
 [![Test status](https://github.com/Morgawr/kechimochi/actions/workflows/test.yml/badge.svg)](https://github.com/Morgawr/kechimochi/actions/workflows/test.yml)
 
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/morgawr/ec5ee3f88d6da60d5de0504267e07de7/raw/kechimochi-coverage.json)
+
 <p align="center">
   <img src="public/logo.png" width="120" alt="Kechimochi Logo" />
 </p>

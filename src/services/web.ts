@@ -158,6 +158,10 @@ export class WebServices implements AppServices {
         return post('/milestones', milestone);
     }
 
+    updateMilestone(milestone: Milestone): Promise<void> {
+        return put(`/milestones/${milestone.id}`, milestone);
+    }
+
     deleteMilestone(id: number): Promise<void> {
         return del(`/milestones/${id}`);
     }

@@ -1,5 +1,5 @@
 import { MediaConflict, MediaCsvRow, Media } from '../api';
-import { searchJiten, getJitenCoverUrl, getJitenDeckUrl, getJitenDeckChildren, JitenResult } from '../jiten_api';
+import { searchJiten, getJitenCoverUrl, getJitenDeckUrl, getJitenDeckChildren, JitenResult, getJitenMediaLabel } from '../jiten_api';
 import { customAlert } from './base';
 
 export async function showAddMediaModal(): Promise<{title: string, type: string, contentType: string} | null> {
@@ -57,9 +57,9 @@ export async function showAddMediaModal(): Promise<{title: string, type: string,
         const updateContentTypes = () => {
             const mType = typeInput.value;
             let options: string[] = ['Unknown'];
-            if (mType === 'Reading') options.push('Visual Novel', 'Manga', 'Novel');
+            if (mType === 'Reading') options.push('Visual Novel', 'Manga', 'Novel', 'WebNovel', 'NonFiction');
             else if (mType === 'Playing') options.push('Videogame');
-            else if (mType === 'Listening') options.push('Podcast');
+            else if (mType === 'Listening') options.push('Audio');
             else if (mType === 'Watching') options.push('Anime', 'Movie', 'Youtube Video', 'Livestream', 'Drama');
 
             contentInput.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
@@ -335,7 +335,7 @@ export async function showJitenSearchModal(media: Media): Promise<string | null>
                     <div style="aspect-ratio: 2/3; position: relative; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                         <img src="${getJitenCoverUrl(res.deckId, res.parentDeckId)}" style="max-width: 100%; max-height: 100%; object-fit: contain; min-height: 100%;" />
                         <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.73); color: white; padding: 0.2rem 0.4rem; font-size: 0.65rem; font-weight: 600; text-transform: uppercase;">
-                            ${res.mediaType === 1 ? 'Anime' : res.mediaType === 9 ? 'Manga' : res.mediaType === 4 ? 'Novel' : res.mediaType === 7 ? 'VN' : 'Media'}
+                            ${getJitenMediaLabel(res.mediaType)}
                         </div>
                     </div>
                     <div style="padding: 0.6rem 0.4rem; flex: 1; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02);">

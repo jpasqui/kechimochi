@@ -61,6 +61,7 @@ export function applyMediaImport(records: MediaCsvRow[]): Promise<number> { retu
 
 export function getMilestones(mediaTitle: string): Promise<Milestone[]> { return getServices().getMilestones(mediaTitle); }
 export function addMilestone(milestone: Milestone): Promise<number> { return getServices().addMilestone(milestone); }
+export function updateMilestone(milestone: Milestone): Promise<void> { return getServices().updateMilestone(milestone); }
 export function deleteMilestone(id: number): Promise<void> { return getServices().deleteMilestone(id); }
 export function clearMilestones(mediaTitle: string): Promise<void> { return getServices().clearMilestones(mediaTitle); }
 export function exportMilestonesCsv(filePath: string): Promise<number> { return getServices().exportMilestonesCsv(filePath); }

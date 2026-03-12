@@ -4,7 +4,7 @@ import { fetchExternalJson } from '../platform';
 
 export class JitenImporter implements MetadataImporter {
     name = "Jiten.moe";
-    supportedContentTypes = ["Anime", "Manga", "Novel", "Drama", "Videogame", "Visual Novel", "Movie", "Podcast"];
+    supportedContentTypes = ["Anime", "Manga", "Novel", "WebNovel", "NonFiction", "Drama", "Videogame", "Visual Novel", "Movie", "Audio"];
 
     matchUrl(url: string, contentType: string): boolean {
         if (!this.supportedContentTypes.includes(contentType)) return false;

@@ -1,6 +1,6 @@
 import { Component } from '../../core/component';
 import { html, escapeHTML } from '../../core/html';
-import { Media, ActivitySummary, Milestone, updateMedia, deleteMedia, getSetting, getMilestones, addMilestone, deleteMilestone, clearMilestones, getLogsForMedia } from '../../api';
+import { Media, ActivitySummary, Milestone, updateMedia, deleteMedia, getSetting, getMilestones, addMilestone, deleteMilestone, clearMilestones, getLogsForMedia, readFileBytes, downloadAndSaveImage } from '../../api';
 import { customAlert, customConfirm, customPrompt, showJitenSearchModal, showImportMergeModal, showAddMilestoneModal, showLogActivityModal } from '../../modals';
 import { isValidImporterUrl, getAvailableSourcesForContentType, fetchMetadataForUrl } from '../../importers';
 import { getServices } from '../../services';
@@ -34,7 +34,7 @@ export class MediaDetail extends Component<MediaDetailState> {
         this.onPrev = callbacks.onPrev;
         this.onNavigate = callbacks.onNavigate;
         this.onDelete = callbacks.onDelete;
-        this.onViewportResize = () => this.placeMilestonesCard();
+        this.onViewportResize = () => this.syncViewportLayout();
         window.addEventListener('resize', this.onViewportResize);
         this.loadImage();
         this.loadMilestones();
@@ -51,7 +51,14 @@ export class MediaDetail extends Component<MediaDetailState> {
 
     private async loadImage() {
         const { cover_image } = this.state.media;
-        const src = await getServices().loadCoverImage(cover_image);
+        let src: string | null = null;
+        if (getServices().isDesktop()) {
+            const bytes = await readFileBytes(cover_image);
+            const blob = new Blob([new Uint8Array(bytes)]);
+            src = URL.createObjectURL(blob);
+        } else {
+            src = await getServices().loadCoverImage(cover_image);
+        }
         if (src) this.setState({ imgSrc: src });
     }
 
@@ -90,9 +97,9 @@ export class MediaDetail extends Component<MediaDetailState> {
                 </div>
 
                 <!-- Main Content -->
-                <div id="media-content-area" style="display: flex; gap: 2rem; flex: 1; overflow-y: auto;">
+                <div id="media-content-area" style="display: flex; gap: 2rem; flex: 1; overflow: hidden;">
                     <!-- Left Column: Cover -->
-                    <div id="media-cover-column" style="flex: 0 0 300px; display: flex; flex-direction: column;">
+                    <div id="media-cover-column" style="flex: 0 0 300px; display: flex; flex-direction: column; min-height: 0;">
                         ${imgSrc
                 ? html`<img src="${imgSrc}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius-md); cursor: pointer;" id="media-cover-img" alt="Cover" title="Double click to change image" />`
                 : html`<div style="width: 100%; aspect-ratio: 2/3; background: var(--bg-dark); border: 2px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary);" id="media-cover-img" title="Double click to add image">No Image</div>`
@@ -106,12 +113,12 @@ export class MediaDetail extends Component<MediaDetailState> {
 
                         <div id="media-milestones-slot-left">
                             <!-- Milestones -->
-                            <div id="media-milestones-card" class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color);">
+                            <div id="media-milestones-card" class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color); flex: 1; min-height: 0;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.2rem;">
                                     <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
                                     <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
                                 </div>
-                                <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 400px; overflow-y: auto;">
+                                <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-height: 0; max-height: 400px; overflow-y: auto;">
                                     ${this.renderMilestones()}
                                 </div>
                                 ${this.state.milestones.length > 0 ? html`
@@ -124,7 +131,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                     </div>
 
                     <!-- Right Column: Details -->
-                    <div id="media-detail-column" style="flex: 1; display: flex; flex-direction: column; gap: 1rem;">
+                    <div id="media-detail-column" style="flex: 1; display: flex; flex-direction: column; gap: 1rem; min-height: 0;">
                         <div>
                             <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
                                 <h1 id="media-title" title="Double click to edit title" style="margin: 0; font-size: 2rem; cursor: pointer;">${escapeHTML(media.title)}</h1>
@@ -175,7 +182,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                         <div id="media-milestones-slot-main"></div>
 
                         <!-- Activity Logs -->
-                        <div class="card" style="margin-top: 1rem; flex: 1; display: flex; flex-direction: column; min-height: 200px;">
+                        <div class="card" style="margin-top: 1rem; flex: 1; display: flex; flex-direction: column; min-height: 0;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                                 <h4 style="margin: 0; color: var(--text-secondary);">Recent Activity</h4>
                                 <button class="btn btn-ghost" id="btn-new-media-entry" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; border-radius: 6px; color: var(--accent-green); border-color: var(--accent-green);">+ New Entry</button>
@@ -188,7 +195,7 @@ export class MediaDetail extends Component<MediaDetailState> {
         `;
 
         this.container.appendChild(detailView);
-        this.placeMilestonesCard();
+        this.syncViewportLayout();
         this.setupListeners(detailView);
         this.renderStats(detailView);
 
@@ -204,6 +211,51 @@ export class MediaDetail extends Component<MediaDetailState> {
 
         const useMainColumn = window.matchMedia('(max-width: 1024px)').matches;
         (useMainColumn ? mainSlot : leftSlot).appendChild(card);
+    }
+
+    private syncViewportLayout() {
+        this.placeMilestonesCard();
+        this.adjustDesktopCoverSize();
+    }
+
+    private adjustDesktopCoverSize() {
+        const coverEl = this.container.querySelector('#media-cover-img') as HTMLElement | null;
+        const coverColumn = this.container.querySelector('#media-cover-column') as HTMLElement | null;
+        const deleteBlock = this.container.querySelector('#media-delete-block') as HTMLElement | null;
+        const milestonesCard = this.container.querySelector('#media-milestones-card') as HTMLElement | null;
+        if (!coverEl || !coverColumn || !deleteBlock || !milestonesCard) return;
+
+        const isDesktop = window.matchMedia('(min-width: 1025px)').matches;
+        if (!isDesktop) {
+            coverEl.style.height = '';
+            coverEl.style.width = '';
+            coverEl.style.maxWidth = '';
+            coverEl.style.margin = '';
+            coverEl.style.aspectRatio = '';
+            return;
+        }
+
+        const deleteStyles = getComputedStyle(deleteBlock);
+        const milestoneStyles = getComputedStyle(milestonesCard);
+        const deleteOuter = deleteBlock.offsetHeight + parseFloat(deleteStyles.marginTop || '0');
+        const milestoneOuter = milestonesCard.offsetHeight + parseFloat(milestoneStyles.marginTop || '0');
+        const availableForCover = coverColumn.clientHeight - deleteOuter - milestoneOuter - 8;
+        if (availableForCover <= 0) return;
+
+        const currentCoverHeight = coverEl.getBoundingClientRect().height;
+        if (currentCoverHeight > availableForCover) {
+            coverEl.style.height = `${Math.floor(availableForCover)}px`;
+            coverEl.style.width = 'auto';
+            coverEl.style.maxWidth = '100%';
+            coverEl.style.margin = '0 auto';
+            coverEl.style.aspectRatio = '2 / 3';
+        } else {
+            coverEl.style.height = '';
+            coverEl.style.width = '';
+            coverEl.style.maxWidth = '';
+            coverEl.style.margin = '';
+            coverEl.style.aspectRatio = '';
+        }
     }
 
     private renderMilestones(): string {
@@ -234,9 +286,9 @@ export class MediaDetail extends Component<MediaDetailState> {
     private getContentTypeOptions(media: Media): string {
         let validOptions: string[] = ['Unknown'];
         const mType = media.media_type;
-        if (mType === 'Reading') validOptions.push('Visual Novel', 'Manga', 'Novel');
+        if (mType === 'Reading') validOptions.push('Visual Novel', 'Manga', 'Novel', 'WebNovel', 'NonFiction');
         else if (mType === 'Playing') validOptions.push('Videogame');
-        else if (mType === 'Listening') validOptions.push('Podcast');
+        else if (mType === 'Listening') validOptions.push('Audio');
         else if (mType === 'Watching') validOptions.push('Anime', 'Movie', 'Youtube Video', 'Livestream', 'Drama');
         return validOptions.map(opt => `<option value="${opt}" ${opt === media.content_type ? 'selected' : ''}>${opt}</option>`).join('');
     }
@@ -298,7 +350,7 @@ export class MediaDetail extends Component<MediaDetailState> {
         else if (media.media_type === "Reading") { verb = "Read"; totalLabel = "Total Readtime"; }
 
         let readingSpeedHtml = "";
-        const isReadingType = ["Novel", "Visual Novel", "Manga"].includes(media.content_type || "");
+        const isReadingType = ["Novel", "Visual Novel", "Manga", "WebNovel", "NonFiction"].includes(media.content_type || "");
         if (isReadingType && totalMin > 0) {
             try {
                 const extra = JSON.parse(media.extra_data || "{}");
@@ -628,7 +680,7 @@ export class MediaDetail extends Component<MediaDetailState> {
             // Handle cover image merge
             if (merged.coverImageUrl && this.state.media.id) {
                 try {
-                    const newPath = await getServices().downloadAndSaveImage(this.state.media.id!, merged.coverImageUrl);
+                    const newPath = await downloadAndSaveImage(this.state.media.id!, merged.coverImageUrl);
                     this.state.media.cover_image = newPath;
                     await this.loadImage(); // Reload blob URL for the new image
                 } catch (err) {

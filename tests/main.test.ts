@@ -51,8 +51,14 @@ vi.mock('../src/modals', () => ({
 }));
 
 describe('main.ts initialization', () => {
+    const bootApp = async () => {
+        await import('../src/main');
+        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await vi.waitFor(() => expect(api.listProfiles).toHaveBeenCalled());
+    };
+
     beforeEach(async () => {
-        vi.resetModules();
+        vi.clearAllMocks();
         
         document.body.innerHTML = `
             <div id="view-container"></div>
@@ -83,14 +89,12 @@ describe('main.ts initialization', () => {
     });
 
     it('should initialize the App', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
         expect(localStorage.getItem).toHaveBeenCalled();
     });
 
     it('should handle adding a profile', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
         
         vi.mocked(api.switchProfile).mockResolvedValue();
         vi.mocked(modals.customPrompt).mockResolvedValue('new-user');
@@ -103,8 +107,7 @@ describe('main.ts initialization', () => {
     });
 
     it('should handle deleting a profile', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
 
         vi.mocked(api.listProfiles).mockResolvedValue(['user1', 'user2']);
         vi.mocked(modals.customConfirm).mockResolvedValue(true);
@@ -116,8 +119,7 @@ describe('main.ts initialization', () => {
     });
 
     it('should switch views', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
 
         const mediaLink = document.querySelector('[data-view="media"]');
         mediaLink?.dispatchEvent(new Event('click'));
@@ -133,8 +135,7 @@ describe('main.ts initialization', () => {
     });
 
     it('should handle app-navigate event', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
 
         window.dispatchEvent(new CustomEvent('app-navigate', { 
             detail: { view: 'media', focusMediaId: 123 } 
@@ -148,16 +149,14 @@ describe('main.ts initialization', () => {
         vi.mocked(api.listProfiles).mockResolvedValueOnce([]).mockResolvedValue(['new-user']);
         vi.mocked(modals.initialProfilePrompt).mockResolvedValue('new-user');
         
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
         
         await vi.waitFor(() => expect(modals.initialProfilePrompt).toHaveBeenCalled());
         expect(api.switchProfile).toHaveBeenCalledWith('new-user');
     });
 
     it('should handle global add activity button', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
         
         vi.mocked(modals.showLogActivityModal).mockResolvedValue(true);
         
@@ -168,8 +167,7 @@ describe('main.ts initialization', () => {
     });
 
     it('should handle profile updated event', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
 
         vi.mocked(api.listProfiles).mockResolvedValue(['test-user']);
         window.dispatchEvent(new Event('profile-updated'));
@@ -178,8 +176,7 @@ describe('main.ts initialization', () => {
     });
 
     it('should handle window controls', async () => {
-        await import('../src/main');
-        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await bootApp();
 
         const minBtn = document.getElementById('win-min');
         const maxBtn = document.getElementById('win-max');

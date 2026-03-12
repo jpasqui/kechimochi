@@ -68,6 +68,7 @@ export interface AppServices {
     // ── Milestone operations ────────────────────────────────────────────────
     getMilestones(mediaTitle: string): Promise<Milestone[]>;
     addMilestone(milestone: Milestone): Promise<number>;
+    updateMilestone(milestone: Milestone): Promise<void>;
     deleteMilestone(id: number): Promise<void>;
     clearMilestones(mediaTitle: string): Promise<void>;
     exportMilestonesCsv(filePath: string): Promise<number>;

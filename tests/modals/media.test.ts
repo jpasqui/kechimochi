@@ -6,6 +6,12 @@ vi.mock('../../src/jiten_api', () => ({
     getJitenCoverUrl: vi.fn(() => 'cover.jpg'),
     getJitenDeckUrl: vi.fn((id) => `https://jiten.moe/decks/${id}`),
     getJitenDeckChildren: vi.fn(),
+    getJitenMediaLabel: vi.fn((type) => {
+        if (type === 1) return 'Anime';
+        if (type === 9) return 'Manga';
+        if (type === 4) return 'Novel';
+        return 'Media';
+    }),
 }));
 
 import * as jitenApi from '../../src/jiten_api';

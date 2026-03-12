@@ -13,7 +13,12 @@ import type { Media, ActivityLog, ActivitySummary, DailyHeatmap, MediaCsvRow, Me
 declare const __APP_GIT_HASH__: string;
 
 export class DesktopServices implements AppServices {
-    private readonly win = getCurrentWindow();
+    private win: ReturnType<typeof getCurrentWindow> | null = null;
+
+    private getWin() {
+        if (!this.win) this.win = getCurrentWindow();
+        return this.win;
+    }
 
     private getMockValue(key: 'mockOpenPath' | 'mockSavePath'): string | null {
         const globalCandidate = (window as any)[key];
@@ -54,7 +59,10 @@ export class DesktopServices implements AppServices {
 
     async getAppVersion(): Promise<string> {
         const base = await getVersion();
-        return base.startsWith('0.') ? `0.0.0-dev.${__APP_GIT_HASH__}` : base;
+        const hash = typeof __APP_GIT_HASH__ !== 'undefined'
+            ? __APP_GIT_HASH__
+            : ((globalThis as any).__APP_GIT_HASH__ || 'dev');
+        return base.startsWith('0.') ? `0.0.0-dev.${hash}` : base;
     }
 
     // ── File-based operations ─────────────────────────────────────────────────
@@ -96,6 +104,10 @@ export class DesktopServices implements AppServices {
 
     addMilestone(milestone: Milestone): Promise<number> {
         return invoke('add_milestone', { milestone });
+    }
+
+    updateMilestone(milestone: Milestone): Promise<void> {
+        return invoke('update_milestone', { milestone });
     }
 
     deleteMilestone(id: number): Promise<void> {
@@ -169,9 +181,9 @@ export class DesktopServices implements AppServices {
     }
 
     // ── Window management ─────────────────────────────────────────────────────
-    minimizeWindow(): void { this.win.minimize(); }
-    maximizeWindow(): void { this.win.toggleMaximize(); }
-    closeWindow():    void { this.win.close(); }
+    minimizeWindow(): void { this.getWin().minimize(); }
+    maximizeWindow(): void { this.getWin().toggleMaximize(); }
+    closeWindow():    void { this.getWin().close(); }
 
     isDesktop(): boolean { return true; }
 }
