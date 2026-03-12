@@ -125,7 +125,7 @@ export class Dashboard extends Component<DashboardState> {
         this.container.appendChild(root);
 
         // 1. Stats and Heatmap Row
-        const topRow = html`<div style="display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 2rem;"></div>`;
+        const topRow = html`<div id="dashboard-top-row" style="display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 2rem;"></div>`;
         root.appendChild(topRow);
 
         this.containers.stats = html`<div class="card" id="stats-box-container" style="display: flex; flex-direction: column;"></div>`;

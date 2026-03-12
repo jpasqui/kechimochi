@@ -63,7 +63,7 @@ export class MediaGrid extends Component<MediaGridState> {
         const uniqueTypes = Array.from(new Set(this.state.mediaList.map(m => m.content_type || 'Unknown'))).sort();
 
         const header = html`
-            <div style="padding: 0 1rem; display: flex; gap: 1rem; justify-content: space-between; align-items: center;">
+            <div class="media-grid-toolbar" style="padding: 0 1rem; display: flex; gap: 1rem; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <h2 style="margin: 0.5rem 0; color: var(--text-primary); white-space: nowrap;">Library</h2>
                     <button class="btn btn-ghost" id="btn-add-media-grid" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">+ New Media</button>

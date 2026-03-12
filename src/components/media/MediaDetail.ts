@@ -60,25 +60,25 @@ export class MediaDetail extends Component<MediaDetailState> {
         const detailView = html`
             <div class="animate-fade-in" style="display: flex; flex-direction: column; height: 100%; gap: 1rem;" id="media-root">
                 <!-- Header Controls -->
-                <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; background: var(--bg-dark); padding: 0.5rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <div id="media-detail-header" style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; background: var(--bg-dark); padding: 0.5rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                     <div style="flex: 1; display: flex; justify-content: flex-start;">
                         <button class="btn btn-ghost" id="btn-back-grid" style="font-size: 0.9rem; padding: 0.4rem 0.8rem; display: flex; align-items: center; gap: 0.3rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to Grid</button>
                     </div>
                     
-                    <div style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
+                    <div id="media-detail-nav" style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
                         <button class="btn btn-ghost" id="media-prev" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&lt;&lt;</button>
                         <select id="media-select" style="max-width: 800px; text-align: center; border: none; background: transparent; font-size: 1.1rem; color: var(--text-primary); outline: none; appearance: none; cursor: pointer; text-align-last: center; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
                             ${this.mediaList.map((m, i) => `<option value="${i}" ${i === this.currentIndex ? 'selected' : ''}>${m.title}</option>`).join('')}
                         </select>
                         <button class="btn btn-ghost" id="media-next" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&gt;&gt;</button>
                     </div>
-                    <div style="flex: 1;"></div>
+                    <div id="media-detail-header-spacer" style="flex: 1;"></div>
                 </div>
 
                 <!-- Main Content -->
                 <div id="media-content-area" style="display: flex; gap: 2rem; flex: 1; overflow-y: auto;">
                     <!-- Left Column: Cover -->
-                    <div style="flex: 0 0 300px; display: flex; flex-direction: column;">
+                    <div id="media-cover-column" style="flex: 0 0 300px; display: flex; flex-direction: column;">
                         ${imgSrc
                 ? html`<img src="${imgSrc}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius-md); cursor: pointer;" id="media-cover-img" alt="Cover" title="Double click to change image" />`
                 : html`<div style="width: 100%; aspect-ratio: 2/3; background: var(--bg-dark); border: 2px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary);" id="media-cover-img" title="Double click to add image">No Image</div>`
@@ -92,7 +92,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                     </div>
 
                     <!-- Right Column: Details -->
-                    <div style="flex: 1; display: flex; flex-direction: column; gap: 1rem;">
+                    <div id="media-detail-column" style="flex: 1; display: flex; flex-direction: column; gap: 1rem;">
                         <div>
                             <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
                                 <h1 id="media-title" title="Double click to edit title" style="margin: 0; font-size: 2rem; cursor: pointer;">${escapeHTML(media.title)}</h1>
@@ -129,7 +129,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                         </div>
 
                         <!-- Stats & Extra Fields -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                        <div id="media-stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
                             <div class="card" id="media-first-last-stats" style="grid-column: span 3; display: none; justify-content: flex-start; gap: 2rem; padding: 0.5rem 1rem; font-size: 0.85rem;"></div>
                             ${this.getExtraDataHtml(media)}
                         </div>
