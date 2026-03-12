@@ -46,8 +46,8 @@ describe('Milestone CUJ Test', () => {
         const selectedDate = await addMilestone('Dated Milestone', '1', '20', true);
 
         await browser.waitUntil(async () => {
-            const items = await $$('.milestone-item');
-            return items.length === 2;
+            const itemsCount = await $$('.milestone-item').length;
+            return itemsCount === 2;
         }, { timeout: 10000 });
 
         const datedItem = await $(`.milestone-item[title="Achieved on ${selectedDate}"]`);
@@ -60,8 +60,8 @@ describe('Milestone CUJ Test', () => {
         await deleteMilestone(1);
 
         await browser.waitUntil(async () => {
-            const items = await $$('.milestone-item');
-            return items.length === 1;
+            const itemsCount = await $$('.milestone-item').length;
+            return itemsCount === 1;
         }, { timeout: 10000 });
 
         const textAfterSingle = await getMilestoneListText();
