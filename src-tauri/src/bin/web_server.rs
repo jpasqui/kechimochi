@@ -27,6 +27,7 @@ use kechimochi_lib::{csv_import, db, get_username_logic, models};
 
 // ── Error handling ────────────────────────────────────────────────────────────
 
+#[derive(Debug)]
 struct AppError(String);
 
 impl IntoResponse for AppError {
@@ -499,4 +500,239 @@ async fn field_to_tempfile(multipart: &mut Multipart) -> HandlerResult<tempfile:
     let mut tmp = tempfile::NamedTempFile::new().ae()?;
     tmp.write_all(&bytes).ae()?;
     Ok(tmp)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_data_dir() -> std::path::PathBuf {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("kechimochi_web_server_test_{}_{}", std::process::id(), ts))
+    }
+
+    fn sample_media(title: &str) -> models::Media {
+        models::Media {
+            id: None,
+            title: title.to_string(),
+            media_type: "Reading".to_string(),
+            status: "Active".to_string(),
+            language: "Japanese".to_string(),
+            description: String::new(),
+            cover_image: String::new(),
+            extra_data: "{}".to_string(),
+            content_type: "Unknown".to_string(),
+            tracking_status: "Untracked".to_string(),
+        }
+    }
+
+    fn setup_state() -> Shared {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute("ATTACH DATABASE ':memory:' AS shared", []).unwrap();
+        db::create_tables(&conn).unwrap();
+
+        let data_dir = unique_data_dir();
+        std::fs::create_dir_all(&data_dir).unwrap();
+
+        Arc::new(AppState {
+            conn: Mutex::new(conn),
+            data_dir,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_get_version_has_web_prefix() {
+        let version = get_version().await.0;
+        assert!(version.starts_with("web-"));
+    }
+
+    #[tokio::test]
+    async fn test_add_and_get_media_handlers_roundtrip() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let media = sample_media("Web Handler Test");
+        let inserted = add_media(State(state.clone()), Json(media)).await.unwrap().0;
+        assert!(inserted > 0);
+
+        let all = get_all_media(State(state)).await.unwrap().0;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].title, "Web Handler Test");
+        assert_eq!(all[0].id, Some(inserted));
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_set_and_get_setting_handlers_roundtrip() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let body = SetSettingBody {
+            value: "molokai".to_string(),
+        };
+        let _ = set_setting(State(state.clone()), Path("theme".to_string()), Json(body))
+            .await
+            .unwrap();
+
+        let value = get_setting(State(state), Path("theme".to_string())).await.unwrap().0;
+        assert_eq!(value, Some("molokai".to_string()));
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_get_logs_for_media_handler_filters_by_media_id() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let media_a = add_media(State(state.clone()), Json(sample_media("A"))).await.unwrap().0;
+        let media_b = add_media(State(state.clone()), Json(sample_media("B"))).await.unwrap().0;
+
+        {
+            let conn = state.conn.lock().await;
+            db::add_log(&conn, &models::ActivityLog {
+                id: None,
+                media_id: media_a,
+                duration_minutes: 30,
+                date: "2024-01-01".to_string(),
+            }).unwrap();
+            db::add_log(&conn, &models::ActivityLog {
+                id: None,
+                media_id: media_b,
+                duration_minutes: 45,
+                date: "2024-01-02".to_string(),
+            }).unwrap();
+        }
+
+        let logs_for_a = get_logs_for_media(State(state), Path(media_a)).await.unwrap().0;
+        assert_eq!(logs_for_a.len(), 1);
+        assert_eq!(logs_for_a[0].media_id, media_a);
+        assert_eq!(logs_for_a[0].title, "A");
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_list_profiles_handler_excludes_shared_media_db() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        std::fs::write(state.data_dir.join("kechimochi_alpha.db"), "").unwrap();
+        std::fs::write(state.data_dir.join("kechimochi_beta.db"), "").unwrap();
+        std::fs::write(state.data_dir.join("kechimochi_shared_media.db"), "").unwrap();
+
+        let profiles = list_profiles(State(state)).await.unwrap().0;
+
+        assert!(profiles.contains(&"alpha".to_string()));
+        assert!(profiles.contains(&"beta".to_string()));
+        assert!(!profiles.contains(&"shared_media".to_string()));
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_clear_activities_handler_removes_logs_only() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let media_id = add_media(State(state.clone()), Json(sample_media("Clear Activities"))).await.unwrap().0;
+        {
+            let conn = state.conn.lock().await;
+            db::add_log(&conn, &models::ActivityLog {
+                id: None,
+                media_id,
+                duration_minutes: 20,
+                date: "2024-03-01".to_string(),
+            }).unwrap();
+        }
+
+        let before_logs = get_logs(State(state.clone())).await.unwrap().0;
+        assert_eq!(before_logs.len(), 1);
+
+        let _ = clear_activities(State(state.clone())).await.unwrap();
+
+        let after_logs = get_logs(State(state.clone())).await.unwrap().0;
+        assert_eq!(after_logs.len(), 0);
+
+        let media = get_all_media(State(state)).await.unwrap().0;
+        assert_eq!(media.len(), 1);
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_switch_profile_handler_creates_profile_db() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let body = SwitchProfileBody {
+            profile_name: "webprofile".to_string(),
+        };
+        let _ = switch_profile(State(state.clone()), Json(body)).await.unwrap();
+
+        let expected_db = state.data_dir.join("kechimochi_webprofile.db");
+        assert!(expected_db.exists());
+
+        let profiles = list_profiles(State(state)).await.unwrap().0;
+        assert!(profiles.contains(&"webprofile".to_string()));
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_delete_profile_handler_removes_profile_file() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let profile_name = "delete_me".to_string();
+        let profile_path = state.data_dir.join(format!("kechimochi_{}.db", profile_name));
+        std::fs::write(&profile_path, "").unwrap();
+        assert!(profile_path.exists());
+
+        let _ = delete_profile_handler(State(state.clone()), Path(profile_name.clone())).await.unwrap();
+
+        assert!(!profile_path.exists());
+
+        let profiles = list_profiles(State(state)).await.unwrap().0;
+        assert!(!profiles.contains(&profile_name));
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_wipe_everything_handler_removes_covers_and_db_files() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let covers_dir = state.data_dir.join("covers");
+        std::fs::create_dir_all(&covers_dir).unwrap();
+        std::fs::write(covers_dir.join("x.png"), "img").unwrap();
+        std::fs::write(state.data_dir.join("kechimochi_alpha.db"), "").unwrap();
+        std::fs::write(state.data_dir.join("kechimochi_shared_media.db"), "").unwrap();
+
+        let _ = wipe_everything_handler(State(state.clone())).await.unwrap();
+
+        assert!(!covers_dir.exists());
+        assert!(!state.data_dir.join("kechimochi_alpha.db").exists());
+        assert!(!state.data_dir.join("kechimochi_shared_media.db").exists());
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_json_proxy_returns_error_for_unreachable_url() {
+        let payload = FetchJsonBody {
+            url: "http://127.0.0.1:0/unreachable".to_string(),
+            method: "GET".to_string(),
+            body: None,
+            headers: None,
+        };
+
+        let result = fetch_json_proxy(Json(payload)).await;
+        assert!(result.is_err());
+    }
 }

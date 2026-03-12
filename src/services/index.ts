@@ -14,14 +14,62 @@ export type { AppServices };
 
 let _services: AppServices | null = null;
 
-function isDesktopRuntime(): boolean {
+function hasTauriRuntimeGlobals(): boolean {
     const w = window as any;
+    return Boolean(
+        w.__TAURI_INTERNALS__ ||
+        w.__TAURI__ ||
+        typeof w.__TAURI_IPC__ === 'function' ||
+        typeof w.__TAURI_INVOKE__ === 'function'
+    );
+}
+
+function hasDesktopRuntimeUserAgent(): boolean {
+    const ua = navigator.userAgent || '';
+    return /\bTauri\b|\bWebView2\b/i.test(ua);
+}
+
+function isDesktopRuntime(): boolean {
     // Different Tauri versions/execution modes expose different globals.
-    if (w.__TAURI_INTERNALS__ || w.__TAURI__) return true;
+    if (hasTauriRuntimeGlobals()) {
+        return true;
+    }
+
+    // Some runtimes expose a custom protocol/origin.
+    const protocol = window.location?.protocol || '';
+    if (protocol === 'tauri:') return true;
+    const origin = window.location?.origin || '';
+    if (origin.startsWith('tauri://')) return true;
 
     // Fallback for contexts where globals are not yet injected at detection time.
-    const ua = navigator.userAgent || '';
-    return /\bTauri\b/i.test(ua);
+    return hasDesktopRuntimeUserAgent();
+}
+
+function isClearlyWebRuntime(): boolean {
+    if (hasTauriRuntimeGlobals()) {
+        return false;
+    }
+
+    if (hasDesktopRuntimeUserAgent()) return false;
+
+    const protocol = window.location?.protocol || '';
+    // In normal browser web mode this is http(s).
+    return protocol === 'http:' || protocol === 'https:';
+}
+
+async function detectDesktopRuntimeWithRetry(): Promise<boolean> {
+    // In some startup races, Tauri globals appear shortly after DOMContentLoaded.
+    if (isDesktopRuntime()) return true;
+
+    // Avoid delaying web mode startup when we are clearly in a browser context.
+    if (isClearlyWebRuntime()) return false;
+
+    for (let i = 0; i < 40; i++) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        if (isDesktopRuntime()) return true;
+    }
+
+    return false;
 }
 
 export function getServices(): AppServices {
@@ -35,11 +83,12 @@ export function getServices(): AppServices {
 }
 
 export async function initServices(): Promise<AppServices> {
-    const isDesktop = isDesktopRuntime();
+    const isDesktop = await detectDesktopRuntimeWithRetry();
     if (isDesktop) {
         const { DesktopServices } = await import('./desktop');
         _services = new DesktopServices();
     } else {
+        console.warn('[kechimochi] Desktop runtime not detected, using web services adapter');
         const { WebServices } = await import('./web');
         _services = new WebServices();
     }
