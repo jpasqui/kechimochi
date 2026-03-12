@@ -4,7 +4,7 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::db;
-use crate::models::{ActivityLog, Media};
+use crate::models::{ActivityLog, Media, Milestone};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 #[derive(Debug, Deserialize)]
@@ -19,6 +19,18 @@ struct CsvRow {
     duration: i64,
     #[serde(rename = "Language")]
     language: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MilestoneCsvRow {
+    #[serde(rename = "Media Title")]
+    pub media_title: String,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Duration")]
+    pub duration: i64,
+    #[serde(rename = "Date")]
+    pub date: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -188,6 +200,71 @@ pub fn export_logs_csv(conn: &Connection, file_path: &str, start_date: Option<St
     
     wtr.flush().map_err(|e| e.to_string())?;
     Ok(count)
+}
+
+pub fn export_milestones_csv(conn: &Connection, file_path: &str) -> Result<usize, String> {
+    let mut stmt = conn.prepare("SELECT id, media_title, name, duration, date FROM main.milestones ORDER BY id ASC")
+        .map_err(|e| e.to_string())?;
+    
+    let milestone_iter = stmt.query_map([], |row| {
+        Ok(MilestoneCsvRow {
+            media_title: row.get(1)?,
+            name: row.get(2)?,
+            duration: row.get(3)?,
+            date: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut count = 0;
+    let mut wtr = csv::Writer::from_path(file_path).map_err(|e| e.to_string())?;
+
+    for milestone in milestone_iter {
+        let m = milestone.map_err(|e| e.to_string())?;
+        wtr.serialize(m).map_err(|e| e.to_string())?;
+        count += 1;
+    }
+
+    wtr.flush().map_err(|e| e.to_string())?;
+    Ok(count)
+}
+
+pub fn import_milestones_csv(conn: &mut Connection, file_path: &str) -> Result<usize, String> {
+    let path = Path::new(file_path);
+    if !path.exists() {
+        return Err("File not found".into());
+    }
+
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut rdr = csv::ReaderBuilder::new().has_headers(true).from_reader(file);
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let mut imported_count = 0;
+
+    for result in rdr.deserialize() {
+        let record: MilestoneCsvRow = match result {
+            Ok(r) => r,
+            Err(e) => {
+                println!("Error parsing milestone row: {:?}", e);
+                continue;
+            }
+        };
+
+        let milestone = Milestone {
+            id: None,
+            media_title: record.media_title,
+            name: record.name,
+            duration: record.duration,
+            date: record.date,
+        };
+
+        match db::add_milestone(&tx, &milestone) {
+            Ok(_) => imported_count += 1,
+            Err(e) => println!("Error adding milestone log: {}", e),
+        }
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(imported_count)
 }
 
 // Parses the CSV and identifies which incoming media exist vs which are new.

@@ -38,3 +38,12 @@ pub struct DailyHeatmap {
     pub date: String,
     pub total_minutes: i64,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Milestone {
+    pub id: Option<i64>,
+    pub media_title: String,
+    pub name: String,
+    pub duration: i64,
+    pub date: Option<String>,
+}

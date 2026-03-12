@@ -39,6 +39,14 @@ export interface ActivityLog {
   date: string;
 }
 
+export interface Milestone {
+  id?: number;
+  media_title: string;
+  name: string;
+  duration: number; // minutes
+  date?: string; // YYYY-MM-DD
+}
+
 export interface ActivitySummary {
   id: number;
   media_id: number;
@@ -128,6 +136,34 @@ export async function applyMediaImport(records: MediaCsvRow[]): Promise<number> 
 
 export async function getLogsForMedia(mediaId: number): Promise<ActivitySummary[]> {
   return await invoke('get_logs_for_media', { mediaId });
+}
+
+export async function getMilestones(mediaTitle: string): Promise<Milestone[]> {
+  return await invoke('get_milestones', { mediaTitle });
+}
+
+export async function addMilestone(milestone: Milestone): Promise<number> {
+  return await invoke('add_milestone', { milestone });
+}
+
+export async function deleteMilestone(id: number): Promise<void> {
+  return await invoke('delete_milestone', { id });
+}
+
+export async function updateMilestone(milestone: Milestone): Promise<void> {
+  return await invoke('update_milestone', { milestone });
+}
+
+export async function clearMilestones(mediaTitle: string): Promise<void> {
+  return await invoke('delete_milestones_for_media', { mediaTitle });
+}
+
+export async function exportMilestonesCsv(filePath: string): Promise<number> {
+  return await invoke('export_milestones_csv', { filePath });
+}
+
+export async function importMilestonesCsv(filePath: string): Promise<number> {
+  return await invoke('import_milestones_csv', { filePath });
 }
 
 export async function uploadCoverImage(mediaId: number, path: string): Promise<string> {

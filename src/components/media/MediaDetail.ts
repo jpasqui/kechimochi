@@ -1,7 +1,7 @@
 import { Component } from '../../core/component';
 import { html, escapeHTML } from '../../core/html';
-import { Media, ActivitySummary, updateMedia, uploadCoverImage, downloadAndSaveImage, readFileBytes, deleteMedia, getSetting } from '../../api';
-import { customConfirm, customPrompt, showJitenSearchModal, showImportMergeModal } from '../../modals';
+import { Media, ActivitySummary, Milestone, updateMedia, uploadCoverImage, downloadAndSaveImage, readFileBytes, deleteMedia, getSetting, getMilestones, addMilestone, deleteMilestone, clearMilestones } from '../../api';
+import { customConfirm, customPrompt, showJitenSearchModal, showImportMergeModal, showAddMilestoneModal } from '../../modals';
 import { isValidImporterUrl, getAvailableSourcesForContentType, fetchMetadataForUrl } from '../../importers';
 import { open } from '../../utils/dialogs';
 import { MediaLog } from './MediaLog';
@@ -11,6 +11,7 @@ import { formatHhMm } from '../../utils/time';
 interface MediaDetailState {
     media: Media;
     logs: ActivitySummary[];
+    milestones: Milestone[];
     imgSrc: string | null;
 }
 
@@ -24,7 +25,7 @@ export class MediaDetail extends Component<MediaDetailState> {
     private currentIndex: number;
 
     constructor(container: HTMLElement, media: Media, logs: ActivitySummary[], mediaList: Media[], currentIndex: number, callbacks: { onBack: () => void, onNext: () => void, onPrev: () => void, onNavigate: (index: number) => void, onDelete: () => void }) {
-        super(container, { media, logs, imgSrc: null });
+        super(container, { media, logs, milestones: [], imgSrc: null });
         this.mediaList = mediaList;
         this.currentIndex = currentIndex;
         this.onBack = callbacks.onBack;
@@ -33,6 +34,16 @@ export class MediaDetail extends Component<MediaDetailState> {
         this.onNavigate = callbacks.onNavigate;
         this.onDelete = callbacks.onDelete;
         this.loadImage();
+        this.loadMilestones();
+    }
+
+    private async loadMilestones() {
+        try {
+            const milestones = await getMilestones(this.state.media.title);
+            this.setState({ milestones });
+        } catch (e) {
+            console.error("Failed to load milestones", e);
+        }
     }
 
     private async loadImage() {
@@ -96,6 +107,22 @@ export class MediaDetail extends Component<MediaDetailState> {
                             <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.2; text-align: center;">
                                 <strong>DANGER:</strong> COMPLETELY REMOVES THIS MEDIA AND <strong>ALL</strong> ASSOCIATED WORK LOGS FOR ALL USERS.
                             </div>
+                        </div>
+
+                        <!-- Milestones -->
+                        <div class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.2rem;">
+                                <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
+                                <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
+                            </div>
+                            <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 400px; overflow-y: auto;">
+                                ${this.renderMilestones()}
+                            </div>
+                            ${this.state.milestones.length > 0 ? html`
+                                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                                    <button class="btn btn-ghost" id="btn-clear-milestones" style="padding: 0.2rem 0.4rem; font-size: 0.6rem; border-radius: 4px; color: var(--accent-red); opacity: 0.6; font-weight: 500;">Delete all milestones</button>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
 
@@ -164,6 +191,27 @@ export class MediaDetail extends Component<MediaDetailState> {
 
         const logsContainer = detailView.querySelector('#media-logs-container') as HTMLElement;
         new MediaLog(logsContainer, logs).render();
+    }
+
+    private renderMilestones(): string {
+        if (this.state.milestones.length === 0) {
+            return `<div style="text-align: center; color: var(--text-secondary); padding: 0.5rem; font-size: 0.75rem; opacity: 0.6;">No milestones yet.</div>`;
+        }
+
+        return this.state.milestones.map(m => {
+            const dateHover = m.date ? `title="Achieved on ${m.date}"` : '';
+            return `
+                <div class="milestone-item" ${dateHover} style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.5rem; background: rgba(255,255,255,0.03); border-radius: 3px; border: 1px solid rgba(255,255,255,0.05); position: relative;">
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.05rem;">
+                        <span style="font-weight: 600; font-size: 0.8rem; line-height: 1.1;">${escapeHTML(m.name)}</span>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">${formatHhMm(m.duration)}</span>
+                    </div>
+                    <button class="delete-milestone-btn" data-id="${m.id}" style="background: transparent; border: none; color: var(--accent-red); cursor: pointer; padding: 0.15rem; display: flex; align-items: center; justify-content: center; opacity: 0.4; transition: opacity 0.2s;">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                    </button>
+                </div>
+            `;
+        }).join('');
     }
 
     private isActive(status: string): boolean {
@@ -433,6 +481,48 @@ export class MediaDetail extends Component<MediaDetailState> {
                 const url = target.getAttribute('data-url');
                 const key = target.getAttribute('data-key');
                 if (url) await this.performMetadataImport(url, key || undefined);
+            });
+        });
+
+        root.querySelector('#btn-add-milestone')?.addEventListener('click', async () => {
+            const milestone = await showAddMilestoneModal(this.state.media.title);
+            if (milestone) {
+                try {
+                    await addMilestone(milestone);
+                    await this.loadMilestones();
+                    this.render();
+                } catch (e) {
+                    alert("Failed to add milestone: " + e);
+                }
+            }
+        });
+
+        root.querySelector('#btn-clear-milestones')?.addEventListener('click', async () => {
+            if (this.state.milestones.length === 0) return;
+            const ok = await customConfirm("Delete all milestones", `Are you sure you want to permanently delete all milestones for "${this.state.media.title}"?`, "btn-danger", "Delete All");
+            if (ok) {
+                try {
+                    await clearMilestones(this.state.media.title);
+                    await this.loadMilestones();
+                    this.render();
+                } catch (e) {
+                    alert("Failed to delete milestones: " + e);
+                }
+            }
+        });
+
+        root.querySelectorAll('.delete-milestone-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = parseInt((e.currentTarget as HTMLElement).getAttribute('data-id') || "0");
+                if (id && await customConfirm("Delete Milestone", "Are you sure you want to delete this milestone?")) {
+                    try {
+                        await deleteMilestone(id);
+                        await this.loadMilestones();
+                        this.render();
+                    } catch (e) {
+                        alert("Failed to delete milestone: " + e);
+                    }
+                }
             });
         });
     }

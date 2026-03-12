@@ -2,7 +2,7 @@
  * Media Detail helpers.
  */
 /// <reference types="@wdio/globals/types" />
-import { submitPrompt } from './common.js';
+import { submitPrompt, confirmAction } from './common.js';
 
 /**
  * Clicks the "Mark as Complete" button in Media Detail.
@@ -168,4 +168,61 @@ export async function getProjectionValue(id: string): Promise<string> {
     await el.waitForDisplayed({ timeout: 5000 });
     const strong = await el.$('strong');
     return await strong.getText();
+}
+/**
+ * Adds a new milestone.
+ */
+export async function addMilestone(name: string, hours: string, minutes: string, pickDate: boolean = false): Promise<string | null> {
+    const addBtn = await $('#btn-add-milestone');
+    await addBtn.waitForClickable({ timeout: 5000 });
+    await addBtn.click();
+    
+    const nameInput = await $('#milestone-name');
+    await nameInput.waitForDisplayed({ timeout: 5000 });
+    await nameInput.setValue(name);
+    
+    await (await $('#milestone-hours')).setValue(hours);
+    await (await $('#milestone-minutes')).setValue(minutes);
+    
+    let selectedDate: string | null = null;
+    if (pickDate) {
+        await (await $('#milestone-record-date')).click();
+        const firstDay = await $('.cal-day');
+        await firstDay.waitForDisplayed({ timeout: 5000 });
+        selectedDate = await firstDay.getAttribute('data-date');
+        await firstDay.click();
+    }
+    
+    await (await $('#milestone-confirm')).click();
+    return selectedDate;
+}
+
+/**
+ * Deletes a milestone by index.
+ */
+export async function deleteMilestone(index: number): Promise<void> {
+    const deleteBtns = await $$('.delete-milestone-btn');
+    if (deleteBtns[index]) {
+        await deleteBtns[index].click();
+        await confirmAction(true);
+    }
+}
+
+/**
+ * Clears all milestones for the current media.
+ */
+export async function clearAllMilestones(): Promise<void> {
+    const clearBtn = await $('#btn-clear-milestones');
+    await clearBtn.waitForClickable({ timeout: 5000 });
+    await clearBtn.click();
+    await confirmAction(true);
+}
+
+/**
+ * Gets the consolidated text of the milestone list.
+ */
+export async function getMilestoneListText(): Promise<string> {
+    const list = await $('#milestone-list-container');
+    await list.waitForDisplayed({ timeout: 5000 });
+    return await list.getText();
 }
