@@ -17,7 +17,7 @@ describe('VndbImporter', () => {
     describe('matchUrl', () => {
         it('should match valid VNDB URLs', () => {
             expect(importer.matchUrl('https://vndb.org/v5850', 'Visual Novel')).toBe(true);
-            expect(importer.matchUrl('http://vndb.org/v1', 'Visual Novel')).toBe(true);
+            expect(importer.matchUrl('https://vndb.org/v1', 'Visual Novel')).toBe(true);
         });
 
         it('should NOT match invalid URLs or types', () => {
@@ -31,12 +31,12 @@ describe('VndbImporter', () => {
     describe('removeBbcode', () => {
         it('should remove BBCode tags but keep content', () => {
             const input = '[b]Bold[/b] [url=https://vndb.org]VNDB[/url] [spoiler]Secret[/spoiler]';
-            // @ts-ignore - reaching into private method for test
+            // @ts-expect-error - reaching into private method for test
             expect(importer.removeBbcode(input)).toBe('Bold VNDB Secret');
         });
 
         it('should handle empty or null input', () => {
-            // @ts-ignore
+            // @ts-expect-error - reaching into private method
             expect(importer.removeBbcode('')).toBe('');
         });
     });

@@ -3,7 +3,6 @@ import { verifyActiveView } from '../helpers/navigation.js';
 import { addMedia } from '../helpers/library.js';
 import { logActivity } from '../helpers/dashboard.js';
 import { addExtraField, editExtraField, getExtraField, logActivityFromDetail } from '../helpers/media-detail.js';
-import { submitPrompt } from '../helpers/common.js';
 
 describe('Media Management CUJs', () => {
   before(async () => {
@@ -62,6 +61,7 @@ describe('Media Management CUJs', () => {
         const gridItem = await $(`.media-grid-item[data-title="Cyberpunk 2077"]`);
         await gridItem.waitForDisplayed({ timeout: 5000 });
         await gridItem.click();
+        await browser.pause(2000); // Allow onMount (milestones, image) to complete
       }
 
       const fieldKey = 'TestField';

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { showLogActivityModal, showExportCsvModal } from '../../src/modals/activity';
 import * as api from '../../src/api';
+import { Media } from '../../src/api';
 
 vi.mock('../../src/api', () => ({
     getAllMedia: vi.fn(),
@@ -15,6 +16,15 @@ vi.mock('../../src/modals/calendar', () => ({
 
 vi.mock('../../src/modals/base', () => ({
     customPrompt: vi.fn(),
+    createOverlay: vi.fn(() => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        document.body.appendChild(overlay);
+        return {
+            overlay,
+            cleanup: vi.fn(() => overlay.remove())
+        }
+    })
 }));
 
 describe('modals/activity.ts', () => {
@@ -27,7 +37,7 @@ describe('modals/activity.ts', () => {
     describe('showLogActivityModal', () => {
         it('should log activity for existing media', async () => {
             const mockMedia = [{ id: 10, title: 'Item 1', status: 'Active', tracking_status: 'Ongoing' }];
-            vi.mocked(api.getAllMedia).mockResolvedValue(mockMedia as any);
+            vi.mocked(api.getAllMedia).mockResolvedValue(mockMedia as unknown as Media[]);
             
             const promise = showLogActivityModal();
             
@@ -98,7 +108,7 @@ describe('modals/activity.ts', () => {
 
         it('should reactive archived media when logging activity', async () => {
             const mockMedia = [{ id: 10, title: 'Archived Item', status: 'Archived', tracking_status: 'Ongoing' }];
-            vi.mocked(api.getAllMedia).mockResolvedValue(mockMedia as any);
+            vi.mocked(api.getAllMedia).mockResolvedValue(mockMedia as unknown as Media[]);
             
             const promise = showLogActivityModal();
             await vi.waitFor(() => document.querySelector('#add-activity-form'));
@@ -116,7 +126,7 @@ describe('modals/activity.ts', () => {
              const promise = showLogActivityModal();
              await vi.waitFor(() => document.querySelector('.modal-overlay'));
              
-             window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+             globalThis.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
              
              const result = await promise;
              expect(result).toBe(false);

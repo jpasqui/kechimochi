@@ -19,21 +19,23 @@ try {
         localStorage.removeItem('kechimochi_mock_date');
     }
 } catch (e) {
+    // eslint-disable-next-line no-console
     console.warn('[kechimochi] Failed to access storage for mock date:', e);
 }
 
 if (mockDateStr) {
+    // eslint-disable-next-line no-console
     console.log(`[kechimochi] Mocking system date to: ${mockDateStr}`);
     const originalDate = Date;
     const frozenTimestamp = new Date(mockDateStr + "T12:00:00Z").getTime();
 
-    // @ts-ignore
+    // @ts-expect-error - overriding global Date for testing
     globalThis.Date = class extends originalDate {
-        constructor(...args: any[]) {
+        constructor(...args: unknown[]) {
             if (args.length === 0) {
                 super(frozenTimestamp);
             } else {
-                // @ts-ignore
+                // @ts-expect-error - passing args to original Date
                 super(...args);
             }
         }
@@ -42,31 +44,51 @@ if (mockDateStr) {
         }
     };
 }
+type ViewType = 'dashboard' | 'media' | 'profile';
 
 class App {
-    private currentView: 'dashboard' | 'media' | 'profile' = 'dashboard';
+    private currentView: ViewType = 'dashboard';
     private currentProfile: string = localStorage.getItem('kechimochi_profile') || '';
 
-    private dashboard: Dashboard;
-    private mediaView: MediaView;
-    private profileView: ProfileView;
+    private readonly dashboard: Dashboard;
+    private readonly mediaView: MediaView;
+    private readonly profileView: ProfileView;
 
-    private viewContainer: HTMLElement;
-    private selectProfileEl: HTMLSelectElement;
-    private devBuildBadgeEl: HTMLElement | null;
-    private navLinks: NodeListOf<Element>;
+    private readonly viewContainer: HTMLElement;
+    private readonly dashboardContainer: HTMLElement;
+    private readonly mediaContainer: HTMLElement;
+    private readonly profileContainer: HTMLElement;
+
+    private readonly selectProfileEl: HTMLSelectElement;
+    private readonly devBuildBadgeEl: HTMLElement | null;
+    private readonly navLinks: NodeListOf<HTMLElement>;
 
     constructor() {
         this.viewContainer = document.getElementById('view-container')!;
-        this.selectProfileEl = document.getElementById('select-profile') as HTMLSelectElement;
+        this.selectProfileEl = document.querySelector<HTMLSelectElement>('#select-profile')!;
         this.devBuildBadgeEl = document.getElementById('dev-build-badge');
         this.navLinks = document.querySelectorAll('.nav-link');
 
-        this.dashboard = new Dashboard(this.viewContainer);
-        this.mediaView = new MediaView(this.viewContainer);
-        this.profileView = new ProfileView(this.viewContainer);
+        this.dashboardContainer = document.createElement('div');
+        this.dashboardContainer.style.height = '100%';
+        this.mediaContainer = document.createElement('div');
+        this.mediaContainer.style.height = '100%';
+        this.profileContainer = document.createElement('div');
+        this.profileContainer.style.height = '100%';
 
-        this.init();
+        this.viewContainer.appendChild(this.dashboardContainer);
+        this.viewContainer.appendChild(this.mediaContainer);
+        this.viewContainer.appendChild(this.profileContainer);
+
+        this.dashboard = new Dashboard(this.dashboardContainer);
+        this.mediaView = new MediaView(this.mediaContainer);
+        this.profileView = new ProfileView(this.profileContainer);
+    }
+
+    public static async start(): Promise<App> {
+        const app = new App();
+        await app.init();
+        return app;
     }
 
     private async init() {
@@ -79,7 +101,6 @@ class App {
         // Always show dev build label for now as requested
         if (this.devBuildBadgeEl) {
             this.devBuildBadgeEl.style.display = 'inline-flex';
-            // @ts-ignore
             const appVersion = import.meta.env.VITE_APP_VERSION;
             if (appVersion) {
                 this.devBuildBadgeEl.textContent = `Dev Build ${appVersion}`;
@@ -105,9 +126,8 @@ class App {
 
     private setupNavigation() {
         this.navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                const target = e.target as HTMLElement;
-                const view = target.getAttribute('data-view') as any;
+            link.addEventListener('click', () => {
+                const view = link.dataset.view as ViewType;
                 if (view) this.switchView(view);
             });
         });
@@ -169,9 +189,9 @@ class App {
     }
 
     private setupEventListeners() {
-        window.addEventListener('app-navigate', (e: Event) => {
+        globalThis.addEventListener('app-navigate', (e: Event) => {
             const detail = (e as CustomEvent).detail;
-            if (detail && detail.view) {
+            if (detail?.view) {
                 if (detail.view === 'media' && detail.focusMediaId !== undefined) {
                     this.switchView('media');
                     this.mediaView.jumpToMedia(detail.focusMediaId);
@@ -179,7 +199,7 @@ class App {
             }
         });
 
-        window.addEventListener('profile-updated', () => {
+        globalThis.addEventListener('profile-updated', () => {
             this.loadTheme();
             this.ensureProfilesList();
         });
@@ -215,11 +235,11 @@ class App {
         document.body.dataset.theme = theme;
     }
 
-    private async switchView(view: 'dashboard' | 'media' | 'profile') {
+    private async switchView(view: ViewType) {
         this.currentView = view;
 
         this.navLinks.forEach(n => {
-            const dataView = n.getAttribute('data-view');
+            const dataView = n.dataset.view;
             n.classList.toggle('active', dataView === view);
         });
 
@@ -232,13 +252,22 @@ class App {
     }
 
     private renderCurrentView() {
+        this.dashboardContainer.style.display = this.currentView === 'dashboard' ? 'block' : 'none';
+        this.mediaContainer.style.display = this.currentView === 'media' ? 'block' : 'none';
+        this.profileContainer.style.display = this.currentView === 'profile' ? 'block' : 'none';
+
         if (this.currentView === 'dashboard') this.dashboard.render();
         else if (this.currentView === 'media') this.mediaView.render();
         else if (this.currentView === 'profile') this.profileView.render();
     }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await initServices();
-    new App();
+document.addEventListener('DOMContentLoaded', () => {
+    (async () => {
+        await initServices();
+        await App.start();
+    })().catch(e => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to start application:', e);
+    });
 });

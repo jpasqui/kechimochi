@@ -26,6 +26,12 @@ import type {
   Milestone,
 } from './types';
 
+declare global {
+  interface Window {
+    mockDownloadedImagePath?: string;
+  }
+}
+
 async function desktopInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   if (!getServices().isDesktop()) {
     throw new Error(`${command} is not supported in web mode.`);
@@ -68,7 +74,7 @@ export function exportMilestonesCsv(filePath: string): Promise<number> { return 
 export function importMilestonesCsv(filePath: string): Promise<number> { return getServices().importMilestonesCsv(filePath); }
 
 export async function downloadAndSaveImage(mediaId: number, url: string): Promise<string> {
-  const direct = (window as any).mockDownloadedImagePath;
+  const direct = window.mockDownloadedImagePath;
   if (typeof direct === 'string' && direct.length > 0) {
     return direct;
   }

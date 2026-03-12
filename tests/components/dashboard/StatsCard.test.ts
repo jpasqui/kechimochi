@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StatsCard } from '../../../src/components/dashboard/StatsCard';
-import { ActivitySummary } from '../../../src/api';
+import { ActivitySummary, Media } from '../../../src/api';
 
 describe('StatsCard', () => {
     let container: HTMLElement;
@@ -25,7 +25,7 @@ describe('StatsCard', () => {
             { id: 3, media_id: 2, title: 'T2', media_type: 'Watching', duration_minutes: 30, date: '2024-01-04', language: 'Japanese' },
         ];
         
-        const component = new StatsCard(container, { logs, mediaList: [{} as any, {} as any] });
+        const component = new StatsCard(container, { logs, mediaList: [{} as unknown as Media, {} as unknown as Media] });
         component.render();
 
         expect(container.querySelector('#stat-total-logs')?.textContent).toBe('3');

@@ -3,7 +3,7 @@ import { HeatmapView } from '../../../src/components/dashboard/HeatmapView';
 
 describe('HeatmapView', () => {
     let container: HTMLElement;
-    let onYearChange: any;
+    let onYearChange: (offset: number) => void;
 
     beforeEach(() => {
         container = document.createElement('div');
@@ -36,11 +36,11 @@ describe('HeatmapView', () => {
         
         const cell = container.querySelector('.heatmap-cell[title*="2024-01-01"]');
         expect(cell).not.toBeNull();
-        expect(cell?.getAttribute('title')).toContain('60 mins');
+        expect((cell as HTMLElement).title).toContain('60 mins');
     });
 
     it('should handle no data recorded', () => {
-        const component = new HeatmapView(container, { heatmapData: [], year: NaN }, onYearChange);
+        const component = new HeatmapView(container, { heatmapData: [], year: Number.NaN }, onYearChange);
         component.render();
         expect(container.textContent).toContain('No data recorded yet');
     });

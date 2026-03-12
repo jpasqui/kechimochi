@@ -8,7 +8,7 @@ interface HeatmapViewState {
 }
 
 export class HeatmapView extends Component<HeatmapViewState> {
-    private onYearChange: (direction: number) => void;
+    private readonly onYearChange: (direction: number) => void;
 
     constructor(container: HTMLElement, initialState: HeatmapViewState, onYearChange: (direction: number) => void) {
         super(container, initialState);
@@ -18,7 +18,7 @@ export class HeatmapView extends Component<HeatmapViewState> {
     render() {
         this.clear();
         
-        if (isNaN(this.state.year)) {
+        if (Number.isNaN(this.state.year)) {
             this.container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No data recorded yet.</div>';
             return;
         }
@@ -39,7 +39,7 @@ export class HeatmapView extends Component<HeatmapViewState> {
         `;
 
         this.container.appendChild(card);
-        this.renderHeatmap(card.querySelector('#heatmap-inner-container') as HTMLElement);
+        this.renderHeatmap(card.querySelector<HTMLElement>('#heatmap-inner-container')!);
         
         card.querySelector('#btn-heatmap-prev')?.addEventListener('click', () => this.onYearChange(-1));
         card.querySelector('#btn-heatmap-next')?.addEventListener('click', () => this.onYearChange(1));
@@ -74,7 +74,7 @@ export class HeatmapView extends Component<HeatmapViewState> {
         const style = getComputedStyle(document.body);
         const getThemeNum = (v: string, def: number) => {
             const s = style.getPropertyValue(v).trim();
-            return s === "" ? def : parseFloat(s);
+            return s === "" ? def : Number.parseFloat(s);
         };
 
         const heatmapHue = style.getPropertyValue('--heatmap-hue').trim() || '353';

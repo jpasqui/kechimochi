@@ -1,16 +1,10 @@
 import { Milestone } from '../api';
 import { buildCalendar } from './calendar';
+import { createOverlay } from './base';
 
 export async function showAddMilestoneModal(mediaTitle: string): Promise<Milestone | null> {
     return new Promise((resolve) => {
-        (window as any).__modalCounter = ((window as any).__modalCounter || 0) + 1;
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.setAttribute('data-overlay-id', (window as any).__modalCounter.toString());
-        
-        document.body.appendChild(overlay);
-        void overlay.offsetWidth;
-        overlay.classList.add('active');
+        const { overlay, cleanup: baseCleanup } = createOverlay();
         
         const today = new Date().toISOString().split('T')[0];
         let selectedDate: string | undefined = undefined;
@@ -19,8 +13,8 @@ export async function showAddMilestoneModal(mediaTitle: string): Promise<Milesto
             <style>
                 /* Remove spin buttons */
                 #milestone-hours::-webkit-outer-spin-button,
-                #milestone-hours::-webkit-inner-spin-button,
                 #milestone-minutes::-webkit-outer-spin-button,
+                #milestone-hours::-webkit-inner-spin-button,
                 #milestone-minutes::-webkit-inner-spin-button {
                     -webkit-appearance: none;
                     margin: 0;
@@ -68,33 +62,32 @@ export async function showAddMilestoneModal(mediaTitle: string): Promise<Milesto
             </div>
         `;
         
-        const cleanup = () => {
-             window.removeEventListener('keydown', handleGlobalEsc);
-             overlay.classList.remove('active');
-             overlay.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-             setTimeout(() => overlay.remove(), 300);
-        };
-
         const handleGlobalEsc = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 cleanup();
                 resolve(null);
             }
         };
-        window.addEventListener('keydown', handleGlobalEsc);
+
+        const cleanup = () => {
+             globalThis.removeEventListener('keydown', handleGlobalEsc);
+             baseCleanup();
+        };
+
+        globalThis.addEventListener('keydown', handleGlobalEsc);
         
-        const nameInput = overlay.querySelector('#milestone-name') as HTMLInputElement;
-        const hoursInput = overlay.querySelector('#milestone-hours') as HTMLInputElement;
-        const minutesInput = overlay.querySelector('#milestone-minutes') as HTMLInputElement;
-        const recordDateCheckbox = overlay.querySelector('#milestone-record-date') as HTMLInputElement;
-        const calendarContainer = overlay.querySelector('#milestone-calendar-container') as HTMLElement;
+        const nameInput = overlay.querySelector<HTMLInputElement>('#milestone-name')!;
+        const hoursInput = overlay.querySelector<HTMLInputElement>('#milestone-hours')!;
+        const minutesInput = overlay.querySelector<HTMLInputElement>('#milestone-minutes')!;
+        const recordDateCheckbox = overlay.querySelector<HTMLInputElement>('#milestone-record-date')!;
+        const calendarContainer = overlay.querySelector<HTMLElement>('#milestone-calendar-container')!;
 
         const handleConfirm = () => {
             const name = nameInput.value.trim();
             if (!name) return;
             
-            const hours = parseInt(hoursInput.value) || 0;
-            const mins = parseInt(minutesInput.value) || 0;
+            const hours = Number.parseInt(hoursInput.value) || 0;
+            const mins = Number.parseInt(minutesInput.value) || 0;
             const totalDuration = (hours * 60) + mins;
 
             cleanup(); 

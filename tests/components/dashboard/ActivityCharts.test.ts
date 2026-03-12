@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ActivityCharts } from '../../../src/components/dashboard/ActivityCharts';
+import { ActivitySummary } from '../../../src/api';
 import Chart from 'chart.js/auto';
 
 vi.mock('chart.js/auto', () => ({
@@ -10,7 +11,7 @@ vi.mock('chart.js/auto', () => ({
 
 describe('ActivityCharts', () => {
     let container: HTMLElement;
-    let onParamChange: any;
+    let onParamChange: (params: Record<string, unknown>) => void;
 
     beforeEach(() => {
         container = document.createElement('div');
@@ -78,7 +79,7 @@ describe('ActivityCharts', () => {
         // 30 days
         let component = new ActivityCharts(
             container,
-            { logs: [{ date: '2024-01-01', duration_minutes: 10, title: 'T', media_id: 1, media_type: 'M', language: 'J' } as any], timeRangeDays: 30, timeRangeOffset: 0, groupByMode: 'media_type', chartType: 'bar' },
+            { logs: [{ date: '2024-01-01', duration_minutes: 10, title: 'T', media_id: 1, media_type: 'M', language: 'J' } as unknown as ActivitySummary], timeRangeDays: 30, timeRangeOffset: 0, groupByMode: 'media_type', chartType: 'bar' },
             onParamChange
         );
         component.render();
@@ -88,7 +89,7 @@ describe('ActivityCharts', () => {
         vi.clearAllMocks();
         component = new ActivityCharts(
             container,
-            { logs: [{ date: '2024-01-01', duration_minutes: 10, title: 'T', media_id: 1, media_type: 'M', language: 'J' } as any], timeRangeDays: 365, timeRangeOffset: 0, groupByMode: 'media_type', chartType: 'bar' },
+            { logs: [{ date: '2024-01-01', duration_minutes: 10, title: 'T', media_id: 1, media_type: 'M', language: 'J' } as unknown as ActivitySummary], timeRangeDays: 365, timeRangeOffset: 0, groupByMode: 'media_type', chartType: 'bar' },
             onParamChange
         );
         component.render();
@@ -98,7 +99,7 @@ describe('ActivityCharts', () => {
     it('should handle alternative grouping modes', () => {
         const component = new ActivityCharts(
             container,
-            { logs: [{ date: '2024-01-01', duration_minutes: 10, title: 'T', media_id: 1, media_type: 'M', language: 'J' } as any], timeRangeDays: 7, timeRangeOffset: 0, groupByMode: 'log_name', chartType: 'line' },
+            { logs: [{ date: '2024-01-01', duration_minutes: 10, title: 'T', media_id: 1, media_type: 'M', language: 'J' } as unknown as ActivitySummary], timeRangeDays: 7, timeRangeOffset: 0, groupByMode: 'log_name', chartType: 'line' },
             onParamChange
         );
         component.render();

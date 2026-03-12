@@ -19,6 +19,7 @@ export async function calculateReport(): Promise<void> {
     expect(await title.getText()).toBe('Success');
     
     const text = await overlay.$('p');
+    // eslint-disable-next-line no-console
     console.log(`[E2E-TRACE] calculateReport: ${await text.getText()}`);
     
     // Close it

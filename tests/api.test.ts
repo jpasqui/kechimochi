@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as api from '../src/api';
+import { Media, Milestone, ActivityLog } from '../src/api';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 
@@ -22,14 +23,14 @@ describe('api.ts', () => {
     });
 
     it('addMedia should call invoke', async () => {
-      const media = { title: 'T' } as any;
+      const media = { title: 'T' } as unknown as Media;
       vi.mocked(invoke).mockResolvedValue(1);
       await api.addMedia(media);
       expect(invoke).toHaveBeenCalledWith('add_media', { media });
     });
 
     it('updateMedia should call invoke', async () => {
-      const media = { id: 1, title: 'T' } as any;
+      const media = { id: 1, title: 'T' } as unknown as Media;
       await api.updateMedia(media);
       expect(invoke).toHaveBeenCalledWith('update_media', { media });
     });
@@ -42,7 +43,7 @@ describe('api.ts', () => {
 
   describe('log functions', () => {
     it('addLog should call invoke', async () => {
-      const log = { media_id: 1 } as any;
+      const log = { media_id: 1 } as unknown as ActivityLog;
       await api.addLog(log);
       expect(invoke).toHaveBeenCalledWith('add_log', { log });
     });
@@ -107,7 +108,7 @@ describe('api.ts', () => {
     });
 
     it('addMilestone should call invoke', async () => {
-      const m = { media_title: 'T' } as any;
+      const m = { media_title: 'T' } as unknown as Milestone;
       await api.addMilestone(m);
       expect(invoke).toHaveBeenCalledWith('add_milestone', { milestone: m });
     });
@@ -118,7 +119,7 @@ describe('api.ts', () => {
     });
 
     it('updateMilestone should call invoke', async () => {
-      const m = { id: 1 } as any;
+      const m = { id: 1 } as unknown as Milestone;
       await api.updateMilestone(m);
       expect(invoke).toHaveBeenCalledWith('update_milestone', { milestone: m });
     });
@@ -193,17 +194,18 @@ describe('api.ts', () => {
     });
     
     it('downloadAndSaveImage should return mock path if window.mockDownloadedImagePath exists', async () => {
-      (window as any).mockDownloadedImagePath = 'mock-path';
+      const g = globalThis as unknown as Record<string, unknown>;
+      g.mockDownloadedImagePath = 'mock-path';
       const result = await api.downloadAndSaveImage(1, 'u');
       expect(result).toBe('mock-path');
-      delete (window as any).mockDownloadedImagePath;
+      delete g.mockDownloadedImagePath;
     });
   });
 
   describe('getAppVersion', () => {
     it('should show dev version if base version starts with 0.', async () => {
       vi.mocked(getVersion).mockResolvedValue('0.1.0');
-      (globalThis as any).__APP_GIT_HASH__ = 'abc';
+      (globalThis as unknown as { __APP_GIT_HASH__: string }).__APP_GIT_HASH__ = 'abc';
       const result = await api.getAppVersion();
       expect(result).toBe('0.0.0-dev.abc');
     });

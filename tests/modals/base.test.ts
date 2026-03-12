@@ -57,9 +57,10 @@ describe('modals/base.ts', () => {
     describe('customAlert', () => {
         it('should resolve on OK', async () => {
             const promise = base.customAlert('Title', 'Text');
-            document.getElementById('alert-ok')!.click();
-            await promise;
-            // Passes if it resolves
+            const alertOk = document.getElementById('alert-ok');
+            expect(alertOk).not.toBeNull();
+            alertOk!.click();
+            await expect(promise).resolves.toBeUndefined();
         });
     });
 });

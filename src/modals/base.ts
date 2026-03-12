@@ -1,13 +1,29 @@
+export function createOverlay(): { overlay: HTMLDivElement, cleanup: () => void } {
+    const g = globalThis as unknown as Record<string, number>;
+    g.__modalCounter = (g.__modalCounter || 0) + 1;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.dataset.modalId = g.__modalCounter.toString();
+    
+    document.body.appendChild(overlay);
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    overlay.offsetWidth; // Force reflow
+    overlay.classList.add('active');
+
+    const cleanup = () => {
+        overlay.classList.remove('active');
+        // Clear IDs immediately so E2E selectors don't find dying modals
+        overlay.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+        delete overlay.dataset.modalId;
+        setTimeout(() => overlay.remove(), 300);
+    };
+
+    return { overlay, cleanup };
+}
+
 export async function customPrompt(title: string, defaultValue = "", text = ""): Promise<string | null> {
     return new Promise((resolve) => {
-        (window as any).__modalCounter = ((window as any).__modalCounter || 0) + 1;
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.setAttribute('data-overlay-id', (window as any).__modalCounter.toString());
-        
-        document.body.appendChild(overlay);
-        void overlay.offsetWidth;
-        overlay.classList.add('active');
+        const { overlay, cleanup } = createOverlay();
         
         overlay.innerHTML = `
             <div class="modal-content">
@@ -23,15 +39,7 @@ export async function customPrompt(title: string, defaultValue = "", text = ""):
             </div>
         `;
         
-        const input = overlay.querySelector('#prompt-input') as HTMLInputElement;
-        
-        const cleanup = () => {
-             overlay.classList.remove('active');
-             // Clear IDs immediately so E2E selectors don't find dying modals
-             overlay.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-             overlay.removeAttribute('data-overlay-id');
-             setTimeout(() => overlay.remove(), 300);
-        };
+        const input = overlay.querySelector<HTMLInputElement>('#prompt-input')!;
         
         overlay.querySelector('#prompt-cancel')!.addEventListener('click', () => { cleanup(); resolve(null); });
         overlay.querySelector('#prompt-confirm')!.addEventListener('click', () => { cleanup(); resolve(input.value); });
@@ -46,14 +54,7 @@ export async function customPrompt(title: string, defaultValue = "", text = ""):
 
 export async function customConfirm(title: string, text: string, confirmButtonClass = "btn-danger", confirmButtonText = "Yes"): Promise<boolean> {
     return new Promise((resolve) => {
-        (window as any).__modalCounter = ((window as any).__modalCounter || 0) + 1;
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.setAttribute('data-overlay-id', (window as any).__modalCounter.toString());
-        
-        document.body.appendChild(overlay);
-        void overlay.offsetWidth;
-        overlay.classList.add('active');
+        const { overlay, cleanup } = createOverlay();
         
         overlay.innerHTML = `
             <div class="modal-content">
@@ -66,14 +67,6 @@ export async function customConfirm(title: string, text: string, confirmButtonCl
             </div>
         `;
         
-        const cleanup = () => {
-             overlay.classList.remove('active');
-             // Clear IDs immediately so E2E selectors don't find dying modals
-             overlay.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-             overlay.removeAttribute('data-overlay-id');
-             setTimeout(() => overlay.remove(), 300);
-        };
-        
         overlay.querySelector('#confirm-cancel')!.addEventListener('click', () => { cleanup(); resolve(false); });
         overlay.querySelector('#confirm-ok')!.addEventListener('click', () => { cleanup(); resolve(true); });
     });
@@ -81,14 +74,7 @@ export async function customConfirm(title: string, text: string, confirmButtonCl
 
 export async function customAlert(title: string, text: string): Promise<void> {
     return new Promise((resolve) => {
-        (window as any).__modalCounter = ((window as any).__modalCounter || 0) + 1;
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.setAttribute('data-overlay-id', (window as any).__modalCounter.toString());
-        
-        document.body.appendChild(overlay);
-        void overlay.offsetWidth;
-        overlay.classList.add('active');
+        const { overlay, cleanup } = createOverlay();
         
         overlay.innerHTML = `
             <div class="modal-content">
@@ -99,14 +85,6 @@ export async function customAlert(title: string, text: string): Promise<void> {
                 </div>
             </div>
         `;
-        
-        const cleanup = () => {
-             overlay.classList.remove('active');
-             // Clear IDs immediately so E2E selectors don't find dying modals
-             overlay.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-             overlay.removeAttribute('data-overlay-id');
-             setTimeout(() => overlay.remove(), 300);
-        };
         
         overlay.querySelector('#alert-ok')!.addEventListener('click', () => { cleanup(); resolve(); });
     });

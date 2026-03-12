@@ -15,6 +15,9 @@ vi.mock('../../src/jiten_api', () => ({
 }));
 
 import * as jitenApi from '../../src/jiten_api';
+import { JitenResult } from '../../src/jiten_api';
+import { Media, MediaConflict } from '../../src/api';
+import { ScrapedMetadata } from '../../src/importers/index';
 
 describe('modals/media.ts', () => {
     beforeEach(() => {
@@ -66,7 +69,7 @@ describe('modals/media.ts', () => {
                 extraData: { 'Author': 'Old Author' }
             };
 
-            const promise = showImportMergeModal(scraped as any, current as any);
+            const promise = showImportMergeModal(scraped as unknown as ScrapedMetadata, current as unknown as { description?: string, coverImageUrl?: string, extraData: Record<string, string>, imagesIdentical?: boolean });
             await vi.waitFor(() => document.querySelector('#import-confirm'));
             
             // Uncheck one field
@@ -87,7 +90,7 @@ describe('modals/media.ts', () => {
             const conflicts = [
                 { incoming: { "Title": "M1", "Status": "Ongoing" }, existing: { status: "Not Started" } }
             ];
-            const promise = showMediaCsvConflictModal(conflicts as any);
+            const promise = showMediaCsvConflictModal(conflicts as unknown as MediaConflict[]);
             await vi.waitFor(() => document.querySelector('#conflict-confirm'));
             
             const radioReplace = document.querySelector('input[value="replace"]') as HTMLInputElement;
@@ -103,9 +106,9 @@ describe('modals/media.ts', () => {
 
     describe('showJitenSearchModal', () => {
         it('should search and resolve selected deck URL', async () => {
-            vi.mocked(jitenApi.searchJiten).mockResolvedValue([{ deckId: 123, originalTitle: 'Result', mediaType: 4 }] as any);
+            vi.mocked(jitenApi.searchJiten).mockResolvedValue([{ deckId: 123, originalTitle: 'Result', mediaType: 4 }] as unknown as JitenResult[]);
             
-            const promise = showJitenSearchModal({ title: 'Query' } as any);
+            const promise = showJitenSearchModal({ title: 'Query' } as unknown as Media);
             await vi.waitFor(() => document.querySelector('.jiten-result-card'));
             
             const card = document.querySelector('.jiten-result-card') as HTMLElement;
@@ -117,10 +120,10 @@ describe('modals/media.ts', () => {
         it('should handle volume selection', async () => {
              const parentDeck = { deckId: 100, originalTitle: 'Series', childrenDeckCount: 2 };
              const childDeck = { deckId: 101, originalTitle: 'Vol 1' };
-             vi.mocked(jitenApi.searchJiten).mockResolvedValue([parentDeck] as any);
-             vi.mocked(jitenApi.getJitenDeckChildren).mockResolvedValue([childDeck] as any);
+             vi.mocked(jitenApi.searchJiten).mockResolvedValue([parentDeck] as unknown as JitenResult[]);
+             vi.mocked(jitenApi.getJitenDeckChildren).mockResolvedValue([childDeck] as unknown as JitenResult[]);
 
-             const promise = showJitenSearchModal({ title: 'Query' } as any);
+             const promise = showJitenSearchModal({ title: 'Query' } as unknown as Media);
              await vi.waitFor(() => document.querySelector('.jiten-result-card'));
              
              // Click parent deck

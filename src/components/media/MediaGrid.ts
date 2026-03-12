@@ -1,5 +1,5 @@
 import { Component } from '../../core/component';
-import { html } from '../../core/html';
+import { html, escapeHTML } from '../../core/html';
 import { Media, addMedia } from '../../api';
 import { MediaItem } from './MediaItem';
 import { showAddMediaModal } from '../../modals';
@@ -12,15 +12,22 @@ interface MediaGridState {
     hideArchived: boolean;
 }
 
+export interface MediaFilters {
+    searchQuery?: string;
+    typeFilter?: string;
+    statusFilter?: string;
+    hideArchived?: boolean;
+}
+
 export class MediaGrid extends Component<MediaGridState> {
-    private onMediaClick: (mediaId: number) => void;
-    private onDataChange: (jumpToId?: number) => Promise<void>;
-    private onFilterChange?: (filters: any) => void;
+    private readonly onMediaClick: (mediaId: number) => void;
+    private readonly onDataChange: (jumpToId?: number) => Promise<void>;
+    private readonly onFilterChange?: (filters: MediaFilters) => void;
     private isDestroyed: boolean = false;
     private currentRenderId: number = 0;
     private headerRendered: boolean = false;
 
-    constructor(container: HTMLElement, initialState: MediaGridState, onMediaClick: (mediaId: number) => void, onDataChange: (jumpToId?: number) => Promise<void>, onFilterChange?: (filters: any) => void) {
+    constructor(container: HTMLElement, initialState: MediaGridState, onMediaClick: (mediaId: number) => void, onDataChange: (jumpToId?: number) => Promise<void>, onFilterChange?: (filters: MediaFilters) => void) {
         super(container, initialState);
         this.onMediaClick = onMediaClick;
         this.onDataChange = onDataChange;
@@ -52,7 +59,7 @@ export class MediaGrid extends Component<MediaGridState> {
     }
 
     private refreshGrid() {
-        const container = this.container.querySelector('#media-grid-container') as HTMLElement;
+        const container = this.container.querySelector<HTMLElement>('#media-grid-container');
         if (container) {
             this.renderItems(container);
         }
@@ -60,7 +67,7 @@ export class MediaGrid extends Component<MediaGridState> {
 
     private renderHeader(container: HTMLElement) {
         container.innerHTML = '';
-        const uniqueTypes = Array.from(new Set(this.state.mediaList.map(m => m.content_type || 'Unknown'))).sort();
+        const uniqueTypes = Array.from(new Set(this.state.mediaList.map(m => m.content_type || 'Unknown'))).sort((a, b) => a.localeCompare(b));
 
         const header = html`
             <div class="media-grid-toolbar" style="padding: 0 1rem; display: flex; gap: 1rem; justify-content: space-between; align-items: center;">
@@ -80,7 +87,7 @@ export class MediaGrid extends Component<MediaGridState> {
                 </select>
                 <select id="grid-type-select" style="padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--text-primary); outline: none; cursor: pointer;">
                     <option value="All" ${this.state.typeFilter === 'All' ? 'selected' : ''}>All Types</option>
-                    ${uniqueTypes.map(t => `<option value="${t}" ${this.state.typeFilter === t ? 'selected' : ''}>${t}</option>`).join('')}
+                    ${uniqueTypes.map(t => `<option value="${escapeHTML(t)}" ${this.state.typeFilter === t ? 'selected' : ''}>${escapeHTML(t)}</option>`).join('')}
                 </select>
                 <div style="display: flex; align-items: center; gap: 0.6rem; user-select: none;">
                     <span style="font-size: 0.85rem; color: var(--text-secondary);">Hide Archived</span>
@@ -116,7 +123,7 @@ export class MediaGrid extends Component<MediaGridState> {
 
         header.querySelector('#btn-refresh-grid')?.addEventListener('click', async (e) => {
             const btn = e.currentTarget as HTMLElement;
-            const icon = btn.querySelector('#refresh-icon') as HTMLElement;
+            const icon = btn.querySelector<HTMLElement>('#refresh-icon');
             if (icon) icon.style.animation = 'spin 0.8s linear infinite';
 
             await this.onDataChange();
@@ -126,26 +133,30 @@ export class MediaGrid extends Component<MediaGridState> {
             if (icon) icon.style.animation = '';
         });
 
-        header.querySelector('#grid-search-filter')?.addEventListener('input', (e) => {
-            this.state.searchQuery = (e.target as HTMLInputElement).value;
+        const searchFilter = header.querySelector<HTMLInputElement>('#grid-search-filter');
+        searchFilter?.addEventListener('input', () => {
+            this.state.searchQuery = searchFilter.value;
             this.refreshGrid();
             this.notifyFilterChange();
         });
 
-        header.querySelector('#grid-type-select')?.addEventListener('change', (e) => {
-            this.state.typeFilter = (e.target as HTMLSelectElement).value;
+        const typeSelect = header.querySelector<HTMLSelectElement>('#grid-type-select');
+        typeSelect?.addEventListener('change', () => {
+            this.state.typeFilter = typeSelect.value;
             this.refreshGrid();
             this.notifyFilterChange();
         });
 
-        header.querySelector('#grid-status-select')?.addEventListener('change', (e) => {
-            this.state.statusFilter = (e.target as HTMLSelectElement).value;
+        const statusSelect = header.querySelector<HTMLSelectElement>('#grid-status-select');
+        statusSelect?.addEventListener('change', () => {
+            this.state.statusFilter = statusSelect.value;
             this.refreshGrid();
             this.notifyFilterChange();
         });
 
-        header.querySelector('#grid-hide-archived')?.addEventListener('change', (e) => {
-            this.state.hideArchived = (e.target as HTMLInputElement).checked;
+        const hideArchived = header.querySelector<HTMLInputElement>('#grid-hide-archived');
+        hideArchived?.addEventListener('change', () => {
+            this.state.hideArchived = hideArchived.checked;
             this.refreshGrid();
             this.notifyFilterChange();
         });

@@ -1,17 +1,18 @@
 import { Component } from '../core/component';
 import { html } from '../core/html';
-import { getLogs, getHeatmap, getAllMedia, ActivitySummary, DailyHeatmap, deleteLog } from '../api';
+import { getLogs, getHeatmap, getAllMedia, ActivitySummary, DailyHeatmap, deleteLog, Media } from '../api';
 import { customConfirm } from '../modals';
 import { StatsCard } from './dashboard/StatsCard';
 import { HeatmapView } from './dashboard/HeatmapView';
 import { ActivityCharts } from './dashboard/ActivityCharts';
 import { setupCopyButton } from '../utils/clipboard';
 import { formatLoggedDuration } from '../utils/time';
+import { Logger } from '../core/logger';
 
 interface DashboardState {
     logs: ActivitySummary[];
     heatmapData: DailyHeatmap[];
-    mediaList: any[];
+    mediaList: Media[];
     currentHeatmapYear: number;
     chartParams: {
         timeRangeDays: number;
@@ -29,7 +30,7 @@ export class Dashboard extends Component<DashboardState> {
     private statsComponent: StatsCard | null = null;
     private isRefreshing: boolean = false;
 
-    private containers: {
+    private readonly containers: {
         stats?: HTMLElement;
         heatmap?: HTMLElement;
         charts?: HTMLElement;
@@ -55,6 +56,10 @@ export class Dashboard extends Component<DashboardState> {
         });
     }
 
+    protected onMount() {
+        this.loadData().catch(e => Logger.error("Failed to load dashboard data", e));
+    }
+
     async loadData() {
         if (this.isRefreshing) return;
         this.isRefreshing = true;
@@ -65,8 +70,8 @@ export class Dashboard extends Component<DashboardState> {
                 getAllMedia()
             ]);
             this.setState({ logs, heatmapData, mediaList, isInitialized: true });
-        } catch (e) {
-            console.error("Dashboard failed to load data", e);
+        } catch (error) {
+            Logger.error("Failed to load dashboard data:", error);
         } finally {
             this.isRefreshing = false;
         }
@@ -93,7 +98,7 @@ export class Dashboard extends Component<DashboardState> {
             this.updateHeatmap();
         }
 
-        if (newState.chartParams || (newState.logs && oldState.logs.length === 0)) {
+        if (newState.chartParams || newState.logs) {
             this.updateCharts();
         }
 
@@ -102,9 +107,10 @@ export class Dashboard extends Component<DashboardState> {
         }
     }
 
-    async render() {
-        if (!this.state.isInitialized && !this.isRefreshing) {
-            await this.loadData();
+    render() {
+        if (!this.state.isInitialized) {
+            this.clear();
+            this.container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">Loading...</div>';
             return;
         }
 
@@ -251,9 +257,9 @@ export class Dashboard extends Component<DashboardState> {
                 input.style.padding = '0.1rem';
 
                 const savePage = () => {
-                    let newPage = parseInt(input.value);
-                    if (isNaN(newPage)) newPage = this.state.currentPage;
-                    newPage = Math.max(1, Math.min(totalPages, newPage));
+                    const page = Number.parseInt(input.value, 10);
+                    if (Number.isNaN(page)) return;
+                    const newPage = Math.max(1, Math.min(totalPages, page));
                     this.setState({ currentPage: newPage });
                 };
 
@@ -307,7 +313,7 @@ export class Dashboard extends Component<DashboardState> {
                         <span>${durationStr}</span> 
                         <span style="color: var(--text-secondary);">of ${log.media_type}</span> 
                         <a class="dashboard-media-link" data-media-id="${log.media_id}" style="color: var(--text-primary); font-weight: 600; cursor: pointer; text-decoration: underline; text-decoration-color: var(--accent-blue);">${log.title}</a>
-                        <button class="copy-btn copy-activity-title" data-title="${String(log.title || '').replace(/"/g, '&quot;')}" title="Copy Title" style="background: transparent; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <button class="copy-btn copy-activity-title" data-title="${String(log.title || '').replaceAll('"', '&quot;')}" title="Copy Title" style="background: transparent; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
                     </div>
@@ -320,25 +326,27 @@ export class Dashboard extends Component<DashboardState> {
         }).join('');
 
         list.querySelectorAll('.copy-activity-title').forEach(btn => {
-            const title = (btn as HTMLElement).getAttribute('data-title') || '';
+            const title = (btn as HTMLElement).dataset.title || '';
             setupCopyButton(btn as HTMLElement, title);
         });
 
         list.querySelectorAll('.delete-log-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = parseInt((e.target as HTMLElement).getAttribute('data-id')!);
-                const confirm = await customConfirm("Delete Log", "Are you sure you want to permanently delete this log entry?");
-                if (confirm) {
-                    await deleteLog(id);
-                    await this.loadData();
-                }
+            btn.addEventListener('click', (e) => {
+                const id = Number.parseInt((e.target as HTMLElement).dataset.id!, 10);
+                (async () => {
+                    const confirm = await customConfirm("Delete Log", "Are you sure you want to permanently delete this log entry?");
+                    if (confirm) {
+                        await deleteLog(id);
+                        await this.loadData();
+                    }
+                })().catch(err => Logger.error("Failed to delete log", err));
             });
         });
 
         list.querySelectorAll('.dashboard-media-link').forEach(link => {
             link.addEventListener('click', (e) => {
-                const mediaId = parseInt((e.target as HTMLElement).getAttribute('data-media-id')!);
-                window.dispatchEvent(new CustomEvent('app-navigate', { detail: { view: 'media', focusMediaId: mediaId } }));
+                const mediaId = (e.currentTarget as HTMLElement).dataset.mediaId;
+                globalThis.dispatchEvent(new CustomEvent('app-navigate', { detail: { view: 'media', focusMediaId: Number.parseInt(mediaId!, 10) } }));
             });
         });
     }

@@ -17,6 +17,7 @@ describe('CUJ: Activity Feedback Loop (Dashboard Management)', () => {
         expect(await verifyActiveView('dashboard')).toBe(true);
 
         const initialLogsCount = await getStatValue('stat-total-logs');
+        // eslint-disable-next-line no-console
         console.log(`Initial logs count: ${initialLogsCount}`);
 
         const targetDate = '2024-03-08';

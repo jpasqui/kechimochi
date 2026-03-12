@@ -4,10 +4,11 @@ import { save as tauriSave, open as tauriOpen, type SaveDialogOptions, type Open
  * Wrapper for Tauri's save dialog that allows for E2E testing overrides.
  */
 export async function save(options?: SaveDialogOptions): Promise<string | null> {
-    // E2E Test Hook
-    if ((window as any).mockSavePath) {
-        console.log("[Dialog] Using mockSavePath:", (window as any).mockSavePath);
-        return (window as any).mockSavePath;
+    const g = globalThis as unknown as Record<string, unknown>;
+    if (g.mockSavePath) {
+        // eslint-disable-next-line no-console
+        console.log("[Dialog] Using mockSavePath:", g.mockSavePath);
+        return g.mockSavePath as string;
     }
     return tauriSave(options);
 }
@@ -16,10 +17,11 @@ export async function save(options?: SaveDialogOptions): Promise<string | null> 
  * Wrapper for Tauri's open dialog that allows for E2E testing overrides.
  */
 export async function open(options?: OpenDialogOptions): Promise<string | string[] | null> {
-    // E2E Test Hook
-    if ((window as any).mockOpenPath) {
-        console.log("[Dialog] Using mockOpenPath:", (window as any).mockOpenPath);
-        return (window as any).mockOpenPath;
+    const g = globalThis as unknown as Record<string, unknown>;
+    if (g.mockOpenPath) {
+        // eslint-disable-next-line no-console
+        console.log("[Dialog] Using mockOpenPath:", g.mockOpenPath);
+        return g.mockOpenPath as string | string[];
     }
     return tauriOpen(options);
 }

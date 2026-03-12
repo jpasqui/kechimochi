@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProfileView } from '../../src/components/profile';
 import * as api from '../../src/api';
+import { Media } from '../../src/api';
 
 vi.mock('../../src/api', () => ({
     getSetting: vi.fn(),
@@ -53,9 +54,9 @@ describe('ProfileView', () => {
         vi.mocked(api.getAppVersion).mockResolvedValue('1.2.3');
 
         const view = new ProfileView(container);
-        await view.render();
+        view.render();
 
-        expect(container.textContent).toContain('test-user');
+        await vi.waitFor(() => expect(container.textContent).toContain('test-user'));
         expect(container.textContent).toContain('v1.2.3');
         expect(container.textContent).toContain('Since 2024-01-01');
     });
@@ -73,7 +74,9 @@ describe('ProfileView', () => {
             return '0';
         });
 
-        await view.render();
+        view.render();
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-select-theme')).not.toBeNull());
 
         const select = container.querySelector('#profile-select-theme') as HTMLSelectElement;
         select.value = 'molokai';
@@ -87,11 +90,13 @@ describe('ProfileView', () => {
         vi.mocked(api.getAppVersion).mockResolvedValue('1.0.0');
         vi.mocked(api.getAllMedia).mockResolvedValue([{
             id: 1, title: 'M1', tracking_status: 'Complete', content_type: 'Novel', extra_data: '{"Character count":"10,000"}'
-        }] as any);
-        vi.mocked(api.getLogsForMedia).mockResolvedValue([{ date: new Date().toISOString().split('T')[0], duration_minutes: 60 }] as any);
+        }] as unknown as Media[]);
+        vi.mocked(api.getLogsForMedia).mockResolvedValue([{ date: new Date().toISOString().split('T')[0], duration_minutes: 60 }] as unknown as api.ActivitySummary[]);
 
         const view = new ProfileView(container);
-        await view.render();
+        view.render();
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-btn-calculate-report')).not.toBeNull());
 
         const calcBtn = container.querySelector('#profile-btn-calculate-report') as HTMLButtonElement;
         calcBtn.click();
@@ -102,24 +107,30 @@ describe('ProfileView', () => {
 
     it('should handle report calculation failure', async () => {
         vi.mocked(api.getAllMedia).mockRejectedValue(new Error('API Error'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const view = new ProfileView(container);
-        await view.render();
+        view.render();
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-btn-calculate-report')).not.toBeNull());
 
         const calcBtn = container.querySelector('#profile-btn-calculate-report') as HTMLButtonElement;
         calcBtn.click();
 
         await vi.waitFor(() => expect(modals.customAlert).toHaveBeenCalledWith("Error", expect.stringContaining("Failed")));
+        consoleSpy.mockRestore();
     });
 
     it('should handle different content types in report calculation', async () => {
         vi.mocked(api.getAllMedia).mockResolvedValue([
             { id: 1, title: 'M1', tracking_status: 'Complete', content_type: 'Manga', extra_data: '{"Character count":"100"}' },
             { id: 2, title: 'VN', tracking_status: 'Complete', content_type: 'Visual Novel', extra_data: '{"Character count":"5000"}' }
-        ] as any);
-        vi.mocked(api.getLogsForMedia).mockResolvedValue([{ date: new Date().toISOString(), duration_minutes: 60 }] as any);
+        ] as unknown as Media[]);
+        vi.mocked(api.getLogsForMedia).mockResolvedValue([{ date: new Date().toISOString(), duration_minutes: 60 }] as unknown as api.ActivitySummary[]);
 
         const view = new ProfileView(container);
-        await view.render();
+        view.render();
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-btn-calculate-report')).not.toBeNull());
 
         const calcBtn = container.querySelector('#profile-btn-calculate-report') as HTMLButtonElement;
         calcBtn.click();
@@ -134,12 +145,16 @@ describe('ProfileView', () => {
         vi.mocked(modals.customConfirm).mockResolvedValue(true);
 
         const view = new ProfileView(container);
-        await view.render();
+        view.render();
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-btn-clear-activities')).not.toBeNull());
 
         const clearBtn = container.querySelector('#profile-btn-clear-activities') as HTMLElement;
-        await clearBtn.click();
+        clearBtn.click();
 
-        expect(modals.customConfirm).toHaveBeenCalled();
-        expect(api.clearActivities).toHaveBeenCalled();
+        await vi.waitFor(() => {
+            expect(modals.customConfirm).toHaveBeenCalled();
+            expect(api.clearActivities).toHaveBeenCalled();
+        });
     });
 });

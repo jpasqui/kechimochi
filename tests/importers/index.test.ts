@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as importersIndex from '../../src/importers/index';
 
 describe('importers/index.ts', () => {
@@ -19,11 +19,12 @@ describe('importers/index.ts', () => {
     });
 
     it('fetchMetadataForUrl should return mock metadata if window.mockMetadata exists', async () => {
-        const mockData = { title: 'Mock' } as any;
-        (window as any).mockMetadata = mockData;
+        const mockData = { title: 'Mock' };
+        const g = globalThis as unknown as Record<string, unknown>;
+        g.mockMetadata = mockData;
         const result = await importersIndex.fetchMetadataForUrl('url', 'type');
         expect(result).toBe(mockData);
-        delete (window as any).mockMetadata;
+        delete g.mockMetadata;
     });
 
     it('fetchMetadataForUrl should throw error if no importer found', async () => {

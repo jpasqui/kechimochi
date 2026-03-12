@@ -4,7 +4,7 @@
 /// <reference types="@wdio/globals/types" />
 /// <reference types="@wdio/visual-service" />
 /// <reference types="@wdio/ocr-service" />
-import path from 'path';
+import path from 'node:path';
 
 /**
  * Use OCR to verify text is visible on screen.
@@ -15,12 +15,13 @@ export async function assertTextVisible(text: string): Promise<void> {
   const imagesFolder = stageDir ? path.join(stageDir, 'ocr') : undefined;
 
   if (imagesFolder) {
-    const { mkdirSync } = await import('fs');
+    const { mkdirSync } = await import('node:fs');
     mkdirSync(imagesFolder, { recursive: true });
   }
 
   try {
     // Force specific imagesFolder for OCR
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (browser as any).ocrWaitForTextDisplayed({
       text,
       timeout: 5000,
@@ -40,12 +41,12 @@ export async function assertTextVisible(text: string): Promise<void> {
 export async function takeAndCompareScreenshot(tag: string): Promise<void> {
   const stageDir = process.env.SPEC_STAGE_DIR;
 
-  const options: any = {};
+  const options: Record<string, string> = {};
   if (stageDir) {
     const actualFolder = path.join(stageDir, 'visual', 'actual');
     const diffFolder = path.join(stageDir, 'visual', 'diff');
 
-    const { mkdirSync } = await import('fs');
+    const { mkdirSync } = await import('node:fs');
     mkdirSync(actualFolder, { recursive: true });
     mkdirSync(diffFolder, { recursive: true });
 
@@ -56,7 +57,7 @@ export async function takeAndCompareScreenshot(tag: string): Promise<void> {
   const result = await browser.checkScreen(tag, options);
 
   // High tolerance for environmental rendering noise
-  expect(result).toBeLessThanOrEqual(10.0);
+  expect(result).toBeLessThanOrEqual(10);
 }
 
 /**
@@ -73,7 +74,8 @@ export async function dismissAlert(timeout = 5000): Promise<void> {
         if (await okBtn.isDisplayed()) {
             // Get the specific overlay ID to wait for its removal
             const overlay = await okBtn.$('./ancestor::div[contains(@class, "modal-overlay")]');
-            const overlayId = await overlay.getAttribute('data-overlay-id');
+            const dataset = await overlay.getProperty('dataset') as Record<string, string>;
+            const overlayId = dataset.overlayId;
             
             await okBtn.waitForClickable({ timeout: 2000 });
             await okBtn.click();
@@ -95,7 +97,8 @@ export async function submitPrompt(value: string): Promise<void> {
     
     // Get the specific overlay ID to wait for its removal
     const overlay = await input.$('./ancestor::div[contains(@class, "modal-overlay")]');
-    const overlayId = await overlay.getAttribute('data-overlay-id');
+    const dataset = await overlay.getProperty('dataset') as Record<string, string>;
+    const overlayId = dataset.overlayId;
 
     await input.waitForClickable({ timeout: 2000 });
     
@@ -126,7 +129,8 @@ export async function confirmAction(ok: boolean = true): Promise<void> {
     
     // Get the specific overlay ID to wait for its removal
     const overlay = await btn.$('./ancestor::div[contains(@class, "modal-overlay")]');
-    const overlayId = await overlay.getAttribute('data-overlay-id');
+    const dataset = await overlay.getProperty('dataset') as Record<string, string>;
+    const overlayId = dataset.overlayId;
 
     await btn.waitForClickable({ timeout: 2000 });
     await btn.click();
@@ -139,7 +143,7 @@ export async function confirmAction(ok: boolean = true): Promise<void> {
  */
 export async function setDialogMockPath(filePath: string): Promise<void> {
     await browser.execute((p) => {
-        (window as any).mockSavePath = p;
-        (window as any).mockOpenPath = p;
+        (globalThis as unknown as { mockSavePath: string, mockOpenPath: string }).mockSavePath = p;
+        (globalThis as unknown as { mockSavePath: string, mockOpenPath: string }).mockOpenPath = p;
     }, filePath);
 }

@@ -3,6 +3,7 @@ import { MediaGrid } from '../../../src/components/media/MediaGrid';
 import { MediaItem } from '../../../src/components/media/MediaItem';
 import { showAddMediaModal } from '../../../src/modals';
 import * as api from '../../../src/api';
+import { Media } from '../../../src/api';
 
 vi.mock('../../../src/components/media/MediaItem', () => ({
     MediaItem: vi.fn().mockImplementation(() => ({
@@ -34,7 +35,7 @@ describe('MediaGrid', () => {
         ];
         const component = new MediaGrid(
             container,
-            { mediaList: mediaList as any, searchQuery: '', typeFilter: 'All', statusFilter: 'All', hideArchived: false },
+            { mediaList: mediaList as unknown as Media[], searchQuery: '', typeFilter: 'All', statusFilter: 'All', hideArchived: false },
             vi.fn(),
             vi.fn()
         );
@@ -55,7 +56,7 @@ describe('MediaGrid', () => {
         ];
         const component = new MediaGrid(
             container,
-            { mediaList: mediaList as any, searchQuery: 'Alp', typeFilter: 'All', statusFilter: 'All', hideArchived: false },
+            { mediaList: mediaList as unknown as Media[], searchQuery: 'Alp', typeFilter: 'All', statusFilter: 'All', hideArchived: false },
             vi.fn(),
             vi.fn()
         );

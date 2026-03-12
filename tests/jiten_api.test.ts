@@ -61,10 +61,10 @@ describe('jiten_api.ts', () => {
       // We want to verify it calls invoke with a different URL
       await jiten.searchJiten('Title!', 'Novel');
       
-      const calls = vi.mocked(invoke).mock.calls;
       // Search original with MT, search original without MT
       // Then search no-punct with MT, search no-punct without MT
-      const noPunctCall = calls.find(call => (call[1] as any).url.includes('titleFilter=Title'));
+      const noPunctCall = (vi.mocked(invoke).mock.calls as unknown as [string, { url: string }][])
+        .find(call => call[1].url.includes('titleFilter=Title'));
       expect(noPunctCall).toBeDefined();
     });
   });

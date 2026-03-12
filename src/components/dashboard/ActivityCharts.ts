@@ -15,7 +15,7 @@ interface ActivityChartsState {
 export class ActivityCharts extends Component<ActivityChartsState> {
     private pieChartInstance: Chart | null = null;
     private barChartInstance: Chart | null = null;
-    private onChartParamChange: (params: Partial<ActivityChartsState>) => void;
+    private readonly onChartParamChange: (params: Partial<ActivityChartsState>) => void;
 
     constructor(container: HTMLElement, initialState: ActivityChartsState, onChartParamChange: (params: Partial<ActivityChartsState>) => void) {
         super(container, initialState);
@@ -94,100 +94,138 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                 this.onChartParamChange({ timeRangeOffset: this.state.timeRangeOffset - 1 });
             }
         });
-        layout.querySelector('#toggle-chart-type')?.addEventListener('change', (e) => {
-            const isLine = (e.target as HTMLInputElement).checked;
-            this.onChartParamChange({ chartType: isLine ? 'line' : 'bar' });
+        const toggleChartType = layout.querySelector<HTMLInputElement>('#toggle-chart-type');
+        toggleChartType?.addEventListener('change', () => {
+            this.onChartParamChange({ chartType: toggleChartType.checked ? 'line' : 'bar' });
         });
-        layout.querySelector('#select-time-range')?.addEventListener('change', (e) => {
-            this.onChartParamChange({ timeRangeDays: parseInt((e.target as HTMLSelectElement).value), timeRangeOffset: 0 });
+        const selectTimeRange = layout.querySelector<HTMLSelectElement>('#select-time-range');
+        selectTimeRange?.addEventListener('change', () => {
+            const days = Number.parseInt(selectTimeRange.value);
+            this.onChartParamChange({ timeRangeDays: days, timeRangeOffset: 0 });
         });
-        layout.querySelector('#toggle-group-by')?.addEventListener('change', (e) => {
-            const isByName = (e.target as HTMLInputElement).checked;
-            this.onChartParamChange({ groupByMode: isByName ? 'log_name' : 'media_type' });
+        const toggleGroupBy = layout.querySelector<HTMLInputElement>('#toggle-group-by');
+        toggleGroupBy?.addEventListener('change', () => {
+            this.onChartParamChange({ groupByMode: toggleGroupBy.checked ? 'log_name' : 'media_type' });
         });
     }
 
     private renderCharts(layout: HTMLElement) {
-        const pieCanvas = layout.querySelector('#pieChart') as HTMLCanvasElement;
-        const barCanvas = layout.querySelector('#barChart') as HTMLCanvasElement;
+        const pieCanvas = layout.querySelector<HTMLCanvasElement>('#pieChart')!;
+        const barCanvas = layout.querySelector<HTMLCanvasElement>('#barChart')!;
         if (!pieCanvas || !barCanvas) return;
 
         if (this.pieChartInstance) this.pieChartInstance.destroy();
         if (this.barChartInstance) this.barChartInstance.destroy();
 
+        const colors = this.getChartColors();
+        const timeRange = this.calculateTimeRange();
+        
+        this.createPieChart(pieCanvas, colors, timeRange);
+        this.createBarChart(barCanvas, colors, timeRange);
+    }
+
+    private getChartColors(): string[] {
         const style = getComputedStyle(document.body);
-        const colors = [
+        return [
           style.getPropertyValue('--chart-1').trim() || '#f4a6b8',
           style.getPropertyValue('--chart-2').trim() || '#b8cdda',
           style.getPropertyValue('--chart-3').trim() || '#e0bbe4',
           style.getPropertyValue('--chart-4').trim() || '#957DAD',
           style.getPropertyValue('--chart-5').trim() || '#D291BC'
         ];
+    }
 
-        const { logs, timeRangeDays, timeRangeOffset, groupByMode, chartType } = this.state;
+    private calculateTimeRange() {
+        const { timeRangeDays } = this.state;
         
-        let labels: string[] = [];
-        let getBucketIndex: (dateStr: string) => number = () => -1;
-        let validStart = '';
-        let validEnd = '';
-        const getLocalISODate = (d: Date) => {
-            const pad = (n: number) => n.toString().padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        };
+        switch (timeRangeDays) {
+            case 7: return this.getWeeklyRange();
+            case 30: return this.getMonthlyRange();
+            case 365: return this.getYearlyRange();
+            default: return this.getWeeklyRange();
+        }
+    }
 
-        const today = new Date();
+    private getLocalISODate(d: Date): string {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
 
-        if (timeRangeDays === 7) {
-            const endDay = new Date(today);
-            endDay.setDate(today.getDate() - (7 * timeRangeOffset));
-            const startDay = new Date(endDay);
-            const dayOfWeek = endDay.getDay(); 
-            const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-            startDay.setDate(endDay.getDate() - diffToMonday);
-            endDay.setDate(startDay.getDate() + 6);
-            validStart = getLocalISODate(startDay);
-            validEnd = getLocalISODate(endDay);
-            for(let i = 0; i < 7; i++) {
-                const d = new Date(startDay);
-                d.setDate(startDay.getDate() + i);
-                labels.push(getLocalISODate(d));
-            }
-            getBucketIndex = (dateStr: string) => labels.indexOf(dateStr);
-        } else if (timeRangeDays === 30) {
-            const targetMonth = new Date(today.getFullYear(), today.getMonth() - timeRangeOffset, 1);
-            const y = targetMonth.getFullYear();
-            const m = targetMonth.getMonth();
-            const startDay = new Date(y, m, 1);
-            const endDay = new Date(y, m + 1, 0);
-            validStart = getLocalISODate(startDay);
-            validEnd = getLocalISODate(endDay);
-            const totalDays = endDay.getDate();
-            const weeksCount = Math.ceil(totalDays / 7);
-            for(let i=0; i<weeksCount; i++) labels.push(`Week ${i+1}`);
-            getBucketIndex = (dateStr: string) => {
-                if (dateStr >= validStart && dateStr <= validEnd) {
-                    const date = new Date(dateStr + "T00:00:00");
-                    const firstOfMonth = new Date(y, m, 1);
-                    const firstDayWeekday = firstOfMonth.getDay();
-                    const offset = (firstDayWeekday === 0 ? 6 : firstDayWeekday - 1);
-                    return Math.floor((date.getDate() + offset - 1) / 7);
-                }
-                return -1;
-            };
-        } else if (timeRangeDays === 365) {
-            const targetYear = today.getFullYear() - timeRangeOffset;
-            validStart = `${targetYear}-01-01`;
-            validEnd = `${targetYear}-12-31`;
-            labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            getBucketIndex = (dateStr: string) => {
-                if (dateStr >= validStart && dateStr <= validEnd) {
-                    return parseInt(dateStr.split('-')[1]) - 1;
-                }
-                return -1;
-            };
+    private getWeeklyRange() {
+        const { timeRangeOffset } = this.state;
+        const labels: string[] = [];
+        const endDay = new Date();
+        endDay.setDate(endDay.getDate() - (7 * timeRangeOffset));
+        const dayOfWeek = endDay.getDay();
+        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        
+        const startDay = new Date(endDay);
+        startDay.setDate(endDay.getDate() - diffToMonday);
+        endDay.setDate(startDay.getDate() + 6);
+
+        const validStart = this.getLocalISODate(startDay);
+        const validEnd = this.getLocalISODate(endDay);
+
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(startDay);
+            d.setDate(startDay.getDate() + i);
+            labels.push(this.getLocalISODate(d));
         }
 
+        return { labels, getBucketIndex: (dateStr: string) => labels.indexOf(dateStr), validStart, validEnd };
+    }
+
+    private getMonthlyRange() {
+        const { timeRangeOffset } = this.state;
+        const labels: string[] = [];
+        const today = new Date();
+        const targetMonth = new Date(today.getFullYear(), today.getMonth() - timeRangeOffset, 1);
+        const y = targetMonth.getFullYear();
+        const m = targetMonth.getMonth();
+        
+        const startDay = new Date(y, m, 1);
+        const endDay = new Date(y, m + 1, 0);
+        const validStart = this.getLocalISODate(startDay);
+        const validEnd = this.getLocalISODate(endDay);
+        
+        const weeksCount = Math.ceil(endDay.getDate() / 7);
+        for (let i = 0; i < weeksCount; i++) labels.push(`Week ${i + 1}`);
+
+        const getBucketIndex = (dateStr: string) => {
+            if (dateStr >= validStart && dateStr <= validEnd) {
+                const date = new Date(dateStr + "T00:00:00");
+                const firstDayWeekday = startDay.getDay();
+                const offset = (firstDayWeekday === 0 ? 6 : firstDayWeekday - 1);
+                return Math.floor((date.getDate() + offset - 1) / 7);
+            }
+            return -1;
+        };
+
+        return { labels, getBucketIndex, validStart, validEnd };
+    }
+
+    private getYearlyRange() {
+        const { timeRangeOffset } = this.state;
+        const targetYear = new Date().getFullYear() - timeRangeOffset;
+        const validStart = `${targetYear}-01-01`;
+        const validEnd = `${targetYear}-12-31`;
+        const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        const getBucketIndex = (dateStr: string) => {
+            if (dateStr >= validStart && dateStr <= validEnd) {
+                return Number.parseInt(dateStr.split('-')[1]) - 1;
+            }
+            return -1;
+        };
+
+        return { labels, getBucketIndex, validStart, validEnd };
+    }
+
+    private createPieChart(canvas: HTMLCanvasElement, colors: string[], timeRange: { labels: string[], getBucketIndex: (dateStr: string) => number, validStart: string, validEnd: string }) {
+        const { logs, groupByMode } = this.state;
+        const { validStart, validEnd } = timeRange;
         const pieTypeMap = new Map<string, number>();
+
         for (const log of logs) {
             if (log.date >= validStart && log.date <= validEnd) {
                 const key = groupByMode === 'media_type' ? log.media_type : log.title;
@@ -195,7 +233,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
             }
         }
 
-        this.pieChartInstance = new Chart(pieCanvas, {
+        this.pieChartInstance = new Chart(canvas, {
             type: 'doughnut',
             data: {
                 labels: Array.from(pieTypeMap.keys()),
@@ -212,7 +250,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                     legend: { display: pieTypeMap.size <= 6, position: 'bottom', labels: { color: '#f0f0f5' } },
                     tooltip: {
                         callbacks: {
-                            label: function(context: any) {
+                            label: (context) => {
                                 const val = context.parsed;
                                 return `${context.dataset.label || context.label}: ${formatStatsDuration(val, true)}`;
                             }
@@ -221,38 +259,18 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                 }
             }
         });
+    }
 
-        const datasetsMap = new Map<string, number[]>();
-        const activeKeysInPeriod = new Set<string>();
-        for (const log of logs) {
-            if (getBucketIndex(log.date) !== -1) {
-                const key = groupByMode === 'media_type' ? log.media_type : log.title;
-                activeKeysInPeriod.add(key);
-            }
-        }
-        for (const key of activeKeysInPeriod) datasetsMap.set(key, Array(labels.length).fill(0));
+    private createBarChart(canvas: HTMLCanvasElement, colors: string[], timeRange: { labels: string[], getBucketIndex: (dateStr: string) => number, validStart: string, validEnd: string }) {
+        const { chartType, timeRangeDays } = this.state;
+        const { labels } = timeRange;
 
-        for (const log of logs) {
-            const index = getBucketIndex(log.date);
-            if (index !== -1) {
-                const key = groupByMode === 'media_type' ? log.media_type : log.title;
-                if (datasetsMap.has(key)) datasetsMap.get(key)![index] += log.duration_minutes;
-            }
-        }
+        const datasets = this.prepareBarChartDatasets(timeRange, colors);
 
-        const datasets = Array.from(datasetsMap.entries()).map(([key, data], i) => ({
-            label: key,
-            data: data,
-            backgroundColor: colors[i % colors.length],
-            borderColor: colors[i % colors.length],
-            fill: chartType === 'line' ? false : undefined,
-            tension: 0.3
-        }));
-
-        this.barChartInstance = new Chart(barCanvas, {
+        this.barChartInstance = new Chart(canvas, {
             type: chartType,
             data: {
-                labels: timeRangeDays === 7 ? labels.map(l => l.slice(5)) : labels,
+                labels: timeRangeDays === 7 ? labels.map((l: string) => l.slice(5)) : labels,
                 datasets: datasets
             },
             options: {
@@ -265,8 +283,8 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                         grid: { color: '#3f3f4e' }, 
                         ticks: { 
                             color: '#a0a0b0',
-                            callback: function(value: any) { 
-                                return formatStatsDuration(value, true);
+                            callback: (value) => { 
+                                return formatStatsDuration(value as number, true);
                             }
                         } 
                     }
@@ -275,8 +293,8 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                     legend: { display: datasets.length <= 6, position: 'top', labels: { color: '#a0a0b0'} },
                     tooltip: {
                         callbacks: {
-                            label: function(context: any) {
-                                const val = context.parsed.y;
+                            label: (context) => {
+                                const val = context.parsed.y ?? 0;
                                 return `${context.dataset.label}: ${formatStatsDuration(val, true)}`;
                             }
                         }
@@ -286,6 +304,50 @@ export class ActivityCharts extends Component<ActivityChartsState> {
         });
     }
 
+    private prepareBarChartDatasets(timeRange: { labels: string[], getBucketIndex: (dateStr: string) => number, validStart: string, validEnd: string }, colors: string[]) {
+        const { logs, groupByMode, chartType } = this.state;
+        const { labels, getBucketIndex } = timeRange;
+
+        const activeKeys = this.getActiveKeys(logs, getBucketIndex, groupByMode);
+        const datasetsMap = this.aggregateDailyData(logs, activeKeys, getBucketIndex, labels.length, groupByMode);
+
+        return Array.from(datasetsMap.entries()).map(([key, data], i) => ({
+            label: key,
+            data: data,
+            backgroundColor: colors[i % colors.length],
+            borderColor: colors[i % colors.length],
+            fill: chartType === 'line' ? false : undefined,
+            tension: 0.3
+        }));
+    }
+
+    private getActiveKeys(logs: ActivitySummary[], getBucketIndex: (date: string) => number, mode: 'media_type' | 'log_name'): Set<string> {
+        const keys = new Set<string>();
+        for (const log of logs) {
+            if (getBucketIndex(log.date) !== -1) {
+                keys.add(mode === 'media_type' ? log.media_type : log.title);
+            }
+        }
+        return keys;
+    }
+
+    private aggregateDailyData(logs: ActivitySummary[], activeKeys: Set<string>, getBucketIndex: (date: string) => number, length: number, mode: 'media_type' | 'log_name') {
+        const map = new Map<string, number[]>();
+        for (const key of activeKeys) {
+            map.set(key, Array.from({ length }, () => 0));
+        }
+
+        for (const log of logs) {
+            const index = getBucketIndex(log.date);
+            if (index !== -1) {
+                const key = mode === 'media_type' ? log.media_type : log.title;
+                if (map.has(key)) {
+                    map.get(key)![index] += log.duration_minutes;
+                }
+            }
+        }
+        return map;
+    }
     public destroy() {
         if (this.pieChartInstance) this.pieChartInstance.destroy();
         if (this.barChartInstance) this.barChartInstance.destroy();

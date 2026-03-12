@@ -1,13 +1,8 @@
+import { createOverlay } from './base';
+
 export async function initialProfilePrompt(defaultName: string = "User"): Promise<string> {
     return new Promise((resolve) => {
-        (window as any).__modalCounter = ((window as any).__modalCounter || 0) + 1;
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.setAttribute('data-overlay-id', (window as any).__modalCounter.toString());
-        
-        document.body.appendChild(overlay);
-        void overlay.offsetWidth;
-        overlay.classList.add('active');
+        const { overlay, cleanup } = createOverlay();
         
         overlay.innerHTML = `
             <div class="modal-content" style="text-align: center;">
@@ -22,15 +17,8 @@ export async function initialProfilePrompt(defaultName: string = "User"): Promis
             </div>
         `;
         
-        const input = overlay.querySelector('#initial-prompt-input') as HTMLInputElement;
-        const confirmBtn = overlay.querySelector('#initial-prompt-confirm') as HTMLButtonElement;
-        
-        const cleanup = () => {
-             overlay.classList.remove('active');
-             overlay.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-             overlay.removeAttribute('data-overlay-id');
-             setTimeout(() => overlay.remove(), 300);
-        };
+        const input = overlay.querySelector<HTMLInputElement>('#initial-prompt-input')!;
+        const confirmBtn = overlay.querySelector<HTMLButtonElement>('#initial-prompt-confirm')!;
         
         const checkInput = () => {
             confirmBtn.disabled = input.value.trim().length === 0;

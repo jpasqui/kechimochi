@@ -1,10 +1,21 @@
-export abstract class Component<T = any> {
+export abstract class Component<T = unknown> {
     protected container: HTMLElement;
     protected state: T;
+
+    private isMounted = false;
 
     constructor(container: HTMLElement, initialState: T) {
         this.container = container;
         this.state = initialState;
+        // Trigger onMount after the current execution context (usually after first render)
+        queueMicrotask(() => this.triggerMount());
+    }
+
+    public triggerMount() {
+        if (!this.isMounted) {
+            this.isMounted = true;
+            this.onMount?.();
+        }
     }
 
     /**
@@ -33,14 +44,16 @@ export abstract class Component<T = any> {
     /**
      * Lifecycle hook called when the component is removed from the DOM.
      */
-    public destroy?(): void;
+    public destroy(): void {
+        // Default implementation
+    }
 
     /**
      * Helper to clear the container safely.
      */
     protected clear() {
         while (this.container.firstChild) {
-            this.container.removeChild(this.container.firstChild);
+            this.container.firstChild.remove();
         }
     }
 }

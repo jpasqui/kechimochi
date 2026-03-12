@@ -9,15 +9,18 @@ describe('core/component.ts', () => {
     it('constructor should initialize state and container', () => {
         const container = document.createElement('div');
         const component = new TestComponent(container, { count: 0 });
-        expect((component as any).container).toBe(container);
-        expect((component as any).state).toEqual({ count: 0 });
+        // @ts-expect-error - testing protected
+        expect(component.container).toBe(container);
+        // @ts-expect-error - testing protected
+        expect(component.state).toEqual({ count: 0 });
     });
 
     it('setState should update state and call render', () => {
         const container = document.createElement('div');
         const component = new TestComponent(container, { count: 0 });
         component.setState({ count: 1 });
-        expect((component as any).state).toEqual({ count: 1 });
+        // @ts-expect-error - testing protected
+        expect(component.state).toEqual({ count: 1 });
         expect(component.render).toHaveBeenCalled();
     });
 
@@ -25,7 +28,8 @@ describe('core/component.ts', () => {
         const container = document.createElement('div');
         container.innerHTML = '<span>1</span><span>2</span>';
         const component = new TestComponent(container, { count: 0 });
-        (component as any).clear();
+        // @ts-expect-error - testing protected
+        component.clear();
         expect(container.children.length).toBe(0);
         expect(container.innerHTML).toBe('');
     });
