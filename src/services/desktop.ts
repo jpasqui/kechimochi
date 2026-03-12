@@ -107,11 +107,32 @@ export class DesktopServices implements AppServices {
     }
 
     exportMilestonesCsv(filePath: string): Promise<number> {
-        return invoke('export_milestones_csv', { filePath });
+        if (filePath && filePath.trim().length > 0) {
+            return invoke('export_milestones_csv', { filePath });
+        }
+        return Promise.resolve(this.getMockSavePath()).then(mockPath => {
+            if (mockPath) return mockPath;
+            return tauriSave({
+                filters: [{ name: 'CSV', extensions: ['csv'] }],
+                defaultPath: 'kechimochi_milestones.csv',
+            });
+        }).then(savePath => {
+            if (!savePath) return 0;
+            return invoke<number>('export_milestones_csv', { filePath: savePath });
+        });
     }
 
     importMilestonesCsv(filePath: string): Promise<number> {
-        return invoke('import_milestones_csv', { filePath });
+        if (filePath && filePath.trim().length > 0) {
+            return invoke('import_milestones_csv', { filePath });
+        }
+        return Promise.resolve(this.getMockOpenPath()).then(mockPath => {
+            if (mockPath) return mockPath;
+            return tauriOpen({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
+        }).then(selected => {
+            if (!selected || typeof selected !== 'string') return 0;
+            return invoke<number>('import_milestones_csv', { filePath: selected });
+        });
     }
 
     // ── Cover image operations ────────────────────────────────────────────────

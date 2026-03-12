@@ -150,28 +150,39 @@ export class WebServices implements AppServices {
     }
 
     // ── Milestone operations ─────────────────────────────────────────────────
-    getMilestones(_mediaTitle: string): Promise<Milestone[]> {
-        return Promise.reject(new Error('Milestones are not yet supported in web mode.'));
+    getMilestones(mediaTitle: string): Promise<Milestone[]> {
+        return get(`/milestones/media/${encodeURIComponent(mediaTitle)}`);
     }
 
-    addMilestone(_milestone: Milestone): Promise<number> {
-        return Promise.reject(new Error('Milestones are not yet supported in web mode.'));
+    addMilestone(milestone: Milestone): Promise<number> {
+        return post('/milestones', milestone);
     }
 
-    deleteMilestone(_id: number): Promise<void> {
-        return Promise.reject(new Error('Milestones are not yet supported in web mode.'));
+    deleteMilestone(id: number): Promise<void> {
+        return del(`/milestones/${id}`);
     }
 
-    clearMilestones(_mediaTitle: string): Promise<void> {
-        return Promise.reject(new Error('Milestones are not yet supported in web mode.'));
+    clearMilestones(mediaTitle: string): Promise<void> {
+        return del(`/milestones/media/${encodeURIComponent(mediaTitle)}`);
     }
 
-    exportMilestonesCsv(_filePath: string): Promise<number> {
-        return Promise.reject(new Error('Milestones are not yet supported in web mode.'));
+    async exportMilestonesCsv(_filePath: string): Promise<number> {
+        const res = await fetch(apiUrl('/export/milestones'));
+        if (!res.ok) throw new Error(await res.text());
+        const blob = await res.blob();
+        triggerDownload(blob, 'kechimochi_milestones.csv');
+        return parseInt(res.headers.get('X-Row-Count') ?? '0', 10);
     }
 
-    importMilestonesCsv(_filePath: string): Promise<number> {
-        return Promise.reject(new Error('Milestones are not yet supported in web mode.'));
+    async importMilestonesCsv(_filePath: string): Promise<number> {
+        const file = await pickFile('.csv');
+        if (!file) return 0;
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(apiUrl('/import/milestones'), { method: 'POST', body: form });
+        if (!res.ok) throw new Error(await res.text());
+        const { count } = await res.json();
+        return count as number;
     }
 
     // ── Cover image operations ────────────────────────────────────────────────

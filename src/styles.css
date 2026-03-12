@@ -968,7 +968,7 @@ input:checked + .slider:before {
     filter: saturate(0.9);
   }
 
-  #media-cover-column > div {
+  #media-delete-block {
     position: absolute;
     left: 0;
     right: 0;
@@ -981,7 +981,7 @@ input:checked + .slider:before {
     z-index: 1;
   }
 
-  #media-cover-column > div > div {
+  #media-delete-block > div {
     display: none;
   }
 
@@ -1119,7 +1119,7 @@ input:checked + .slider:before {
     opacity: 0.2;
   }
 
-  #media-cover-column > div {
+  #media-delete-block {
     padding: 0.5rem !important;
     padding-top: 1.5rem !important;
   }

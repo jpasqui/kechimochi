@@ -91,6 +91,10 @@ async fn main() {
         .route("/api/logs/media/:id",        get(get_logs_for_media))
         .route("/api/logs",                  get(get_logs).post(add_log))
         .route("/api/logs/:id",              delete(delete_log_handler))
+        // Milestones
+        .route("/api/milestones",            post(add_milestone_handler))
+        .route("/api/milestones/media/:title", get(get_milestones_for_media_handler).delete(clear_milestones_for_media_handler))
+        .route("/api/milestones/:id",        delete(delete_milestone_handler))
         // Profiles — specific routes before :name
         .route("/api/profiles/switch",       post(switch_profile))
         .route("/api/profiles",              get(list_profiles))
@@ -108,6 +112,8 @@ async fn main() {
         .route("/api/import/media/analyze",  post(analyze_media_csv_upload))
         .route("/api/import/media/apply",    post(apply_media_import_handler))
         .route("/api/export/media",          get(export_media_handler))
+        .route("/api/import/milestones",     post(import_milestones))
+        .route("/api/export/milestones",     get(export_milestones))
         // Covers — specific routes before the parameterised :media_id route
         .route("/api/covers/download",       post(download_cover))
         .route("/api/covers/file/:filename", get(serve_cover))
@@ -191,6 +197,40 @@ async fn get_logs_for_media(
 ) -> HandlerResult<Json<Vec<models::ActivitySummary>>> {
     let conn = s.conn.lock().await;
     db::get_logs_for_media(&conn, id).ae().map(Json)
+}
+
+// ── Milestone handlers ───────────────────────────────────────────────────────
+
+async fn get_milestones_for_media_handler(
+    State(s): State<Shared>,
+    Path(title): Path<String>,
+) -> HandlerResult<Json<Vec<models::Milestone>>> {
+    let conn = s.conn.lock().await;
+    db::get_milestones_for_media(&conn, &title).ae().map(Json)
+}
+
+async fn add_milestone_handler(
+    State(s): State<Shared>,
+    Json(milestone): Json<models::Milestone>,
+) -> HandlerResult<Json<i64>> {
+    let conn = s.conn.lock().await;
+    db::add_milestone(&conn, &milestone).ae().map(Json)
+}
+
+async fn delete_milestone_handler(
+    State(s): State<Shared>,
+    Path(id): Path<i64>,
+) -> HandlerResult<Json<()>> {
+    let conn = s.conn.lock().await;
+    db::delete_milestone(&conn, id).ae().map(|_| Json(()))
+}
+
+async fn clear_milestones_for_media_handler(
+    State(s): State<Shared>,
+    Path(title): Path<String>,
+) -> HandlerResult<Json<()>> {
+    let conn = s.conn.lock().await;
+    db::delete_milestones_for_media(&conn, &title).ae().map(|_| Json(()))
 }
 
 // ── Profile handlers ──────────────────────────────────────────────────────────
@@ -336,6 +376,35 @@ async fn export_media_handler(State(s): State<Shared>) -> HandlerResult<Response
     Response::builder()
         .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
         .header(header::CONTENT_DISPOSITION, "attachment; filename=\"media_library.csv\"")
+        .header("x-row-count", count.to_string())
+        .body(Body::from(bytes))
+        .ae()
+}
+
+async fn import_milestones(
+    State(s): State<Shared>,
+    mut multipart: Multipart,
+) -> HandlerResult<Json<serde_json::Value>> {
+    let tmp = field_to_tempfile(&mut multipart).await?;
+    let path = tmp.path().to_str().ok_or_else(|| AppError("Invalid temp path".into()))?.to_owned();
+    let count = {
+        let mut conn = s.conn.lock().await;
+        csv_import::import_milestones_csv(&mut *conn, &path).ae()?
+    };
+    Ok(Json(serde_json::json!({ "count": count })))
+}
+
+async fn export_milestones(State(s): State<Shared>) -> HandlerResult<Response> {
+    let tmp = tempfile::NamedTempFile::new().ae()?;
+    let path = tmp.path().to_str().ok_or_else(|| AppError("Invalid temp path".into()))?.to_owned();
+    let count = {
+        let conn = s.conn.lock().await;
+        csv_import::export_milestones_csv(&conn, &path).ae()?
+    };
+    let bytes = std::fs::read(tmp.path()).ae()?;
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
+        .header(header::CONTENT_DISPOSITION, "attachment; filename=\"milestones.csv\"")
         .header("x-row-count", count.to_string())
         .body(Body::from(bytes))
         .ae()
@@ -529,6 +598,16 @@ mod tests {
         }
     }
 
+    fn sample_milestone(media_title: &str, name: &str, duration: i64) -> models::Milestone {
+        models::Milestone {
+            id: None,
+            media_title: media_title.to_string(),
+            name: name.to_string(),
+            duration,
+            date: Some("2024-03-01".to_string()),
+        }
+    }
+
     fn setup_state() -> Shared {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute("ATTACH DATABASE ':memory:' AS shared", []).unwrap();
@@ -612,6 +691,60 @@ mod tests {
         assert_eq!(logs_for_a.len(), 1);
         assert_eq!(logs_for_a[0].media_id, media_a);
         assert_eq!(logs_for_a[0].title, "A");
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_milestone_handlers_roundtrip() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let media = sample_media("Milestone Media");
+        let _ = add_media(State(state.clone()), Json(media)).await.unwrap();
+
+        let milestone = sample_milestone("Milestone Media", "Chapter 1", 120);
+        let inserted_id = add_milestone_handler(State(state.clone()), Json(milestone)).await.unwrap().0;
+        assert!(inserted_id > 0);
+
+        let milestones = get_milestones_for_media_handler(State(state.clone()), Path("Milestone Media".to_string()))
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(milestones.len(), 1);
+        assert_eq!(milestones[0].name, "Chapter 1");
+
+        let _ = delete_milestone_handler(State(state.clone()), Path(inserted_id)).await.unwrap();
+
+        let milestones_after_delete = get_milestones_for_media_handler(State(state), Path("Milestone Media".to_string()))
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(milestones_after_delete.len(), 0);
+
+        let _ = std::fs::remove_dir_all(state_dir);
+    }
+
+    #[tokio::test]
+    async fn test_clear_milestones_for_media_handler_removes_only_target_media() {
+        let state = setup_state();
+        let state_dir = state.data_dir.clone();
+
+        let _ = add_media(State(state.clone()), Json(sample_media("A"))).await.unwrap();
+        let _ = add_media(State(state.clone()), Json(sample_media("B"))).await.unwrap();
+
+        let _ = add_milestone_handler(State(state.clone()), Json(sample_milestone("A", "A1", 60))).await.unwrap();
+        let _ = add_milestone_handler(State(state.clone()), Json(sample_milestone("A", "A2", 90))).await.unwrap();
+        let _ = add_milestone_handler(State(state.clone()), Json(sample_milestone("B", "B1", 45))).await.unwrap();
+
+        let _ = clear_milestones_for_media_handler(State(state.clone()), Path("A".to_string())).await.unwrap();
+
+        let a_milestones = get_milestones_for_media_handler(State(state.clone()), Path("A".to_string())).await.unwrap().0;
+        let b_milestones = get_milestones_for_media_handler(State(state), Path("B".to_string())).await.unwrap().0;
+
+        assert_eq!(a_milestones.len(), 0);
+        assert_eq!(b_milestones.len(), 1);
+        assert_eq!(b_milestones[0].name, "B1");
 
         let _ = std::fs::remove_dir_all(state_dir);
     }

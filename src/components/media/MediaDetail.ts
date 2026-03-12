@@ -23,6 +23,7 @@ export class MediaDetail extends Component<MediaDetailState> {
     private onDelete: () => void;
     private mediaList: Media[];
     private currentIndex: number;
+    private readonly onViewportResize: () => void;
 
     constructor(container: HTMLElement, media: Media, logs: ActivitySummary[], mediaList: Media[], currentIndex: number, callbacks: { onBack: () => void, onNext: () => void, onPrev: () => void, onNavigate: (index: number) => void, onDelete: () => void }) {
         super(container, { media, logs, milestones: [], imgSrc: null });
@@ -33,6 +34,8 @@ export class MediaDetail extends Component<MediaDetailState> {
         this.onPrev = callbacks.onPrev;
         this.onNavigate = callbacks.onNavigate;
         this.onDelete = callbacks.onDelete;
+        this.onViewportResize = () => this.placeMilestonesCard();
+        window.addEventListener('resize', this.onViewportResize);
         this.loadImage();
         this.loadMilestones();
     }
@@ -94,27 +97,29 @@ export class MediaDetail extends Component<MediaDetailState> {
                 ? html`<img src="${imgSrc}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius-md); cursor: pointer;" id="media-cover-img" alt="Cover" title="Double click to change image" />`
                 : html`<div style="width: 100%; aspect-ratio: 2/3; background: var(--bg-dark); border: 2px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary);" id="media-cover-img" title="Double click to add image">No Image</div>`
             }
-                        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div id="media-delete-block" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.5rem;">
                             <button class="btn" id="btn-delete-media-detail" style="background-color: #ff4757; color: white; border: none; font-weight: bold; width: 100%; padding: 0.6rem; font-size: 0.9rem;">Delete Media</button>
                             <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.2; text-align: center;">
                                 <strong>DANGER:</strong> COMPLETELY REMOVES THIS MEDIA AND <strong>ALL</strong> ASSOCIATED WORK LOGS FOR ALL USERS.
                             </div>
                         </div>
 
-                        <!-- Milestones -->
-                        <div class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.2rem;">
-                                <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
-                                <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
-                            </div>
-                            <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 400px; overflow-y: auto;">
-                                ${this.renderMilestones()}
-                            </div>
-                            ${this.state.milestones.length > 0 ? html`
-                                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
-                                    <button class="btn btn-ghost" id="btn-clear-milestones" style="padding: 0.2rem 0.4rem; font-size: 0.6rem; border-radius: 4px; color: var(--accent-red); opacity: 0.6; font-weight: 500;">Delete all milestones</button>
+                        <div id="media-milestones-slot-left">
+                            <!-- Milestones -->
+                            <div id="media-milestones-card" class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.2rem;">
+                                    <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
+                                    <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
                                 </div>
-                            ` : ''}
+                                <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 400px; overflow-y: auto;">
+                                    ${this.renderMilestones()}
+                                </div>
+                                ${this.state.milestones.length > 0 ? html`
+                                    <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                                        <button class="btn btn-ghost" id="btn-clear-milestones" style="padding: 0.2rem 0.4rem; font-size: 0.6rem; border-radius: 4px; color: var(--accent-red); opacity: 0.6; font-weight: 500;">Delete all milestones</button>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
 
@@ -167,6 +172,8 @@ export class MediaDetail extends Component<MediaDetailState> {
                             <button class="btn btn-ghost btn-meta-clear" id="btn-clear-meta" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Clear Metadata</button>
                         </div>
 
+                        <div id="media-milestones-slot-main"></div>
+
                         <!-- Activity Logs -->
                         <div class="card" style="margin-top: 1rem; flex: 1; display: flex; flex-direction: column; min-height: 200px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -181,11 +188,22 @@ export class MediaDetail extends Component<MediaDetailState> {
         `;
 
         this.container.appendChild(detailView);
+        this.placeMilestonesCard();
         this.setupListeners(detailView);
         this.renderStats(detailView);
 
         const logsContainer = detailView.querySelector('#media-logs-container') as HTMLElement;
         new MediaLog(logsContainer, logs).render();
+    }
+
+    private placeMilestonesCard() {
+        const card = this.container.querySelector('#media-milestones-card') as HTMLElement | null;
+        const leftSlot = this.container.querySelector('#media-milestones-slot-left') as HTMLElement | null;
+        const mainSlot = this.container.querySelector('#media-milestones-slot-main') as HTMLElement | null;
+        if (!card || !leftSlot || !mainSlot) return;
+
+        const useMainColumn = window.matchMedia('(max-width: 1024px)').matches;
+        (useMainColumn ? mainSlot : leftSlot).appendChild(card);
     }
 
     private renderMilestones(): string {

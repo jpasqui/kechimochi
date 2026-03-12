@@ -11,7 +11,6 @@ import {
     showMediaCsvConflictModal, initialProfilePrompt
 } from '../modals';
 import { getServices } from '../services';
-import { open, save } from '@tauri-apps/plugin-dialog';
 
 interface ProfileState {
     currentProfile: string;
@@ -307,26 +306,20 @@ export class ProfileView extends Component<ProfileState> {
             if (!target) return;
             
             if (target.id === 'profile-btn-import-milestones') {
-                const selected = await open({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
-                if (selected && typeof selected === 'string') {
-                    try {
-                        const count = await importMilestonesCsv(selected);
-                        await customAlert("Success", `Successfully imported ${count} milestones!`);
-                    } catch (e) {
-                        await customAlert("Error", `Import failed: ${e}`);
-                    }
+                try {
+                    const count = await importMilestonesCsv('');
+                    await customAlert("Success", `Successfully imported ${count} milestones!`);
+                } catch (e) {
+                    await customAlert("Error", `Import failed: ${e}`);
                 }
             }
             
             if (target.id === 'profile-btn-export-milestones') {
-                const savePath = await save({ filters: [{ name: 'CSV', extensions: ['csv'] }], defaultPath: `kechimochi_${currentProfile}_milestones.csv` });
-                if (savePath) {
-                    try {
-                        const count = await exportMilestonesCsv(savePath);
-                        await customAlert("Success", `Successfully exported ${count} milestones!`);
-                    } catch (e) {
-                        await customAlert("Error", `Export failed: ${e}`);
-                    }
+                try {
+                    const count = await exportMilestonesCsv('');
+                    await customAlert("Success", `Successfully exported ${count} milestones!`);
+                } catch (e) {
+                    await customAlert("Error", `Export failed: ${e}`);
                 }
             }
         });
