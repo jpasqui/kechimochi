@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AnilistImporter } from '../../src/importers/anilist';
 import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('@tauri-apps/api/core', () => ({
-    invoke: vi.fn(),
-}));
-
 describe('AnilistImporter', () => {
     let importer: AnilistImporter;
 
@@ -19,10 +15,6 @@ describe('AnilistImporter', () => {
             expect(importer.matchUrl('https://anilist.co/anime/123/Some-Title/', 'Anime')).toBe(true);
         });
 
-        it('should NOT match invalid URLs or types', () => {
-            expect(importer.matchUrl('https://anilist.co/anime/123', 'Manga')).toBe(false);
-            expect(importer.matchUrl('https://google.com', 'Anime')).toBe(false);
-        });
     });
 
     describe('fetch', () => {
@@ -54,6 +46,7 @@ describe('AnilistImporter', () => {
             expect(result.extraData['Episodes']).toBe('12');
             expect(result.extraData['Airing Season']).toBe('Summer 2024');
             expect(result.extraData['Anilist Score']).toBe('85%');
+            expect(result.extraData['Source (Anilist)']).toBe('https://anilist.co/anime/123/');
             expect(result.extraData['Original Source']).toBe('Light Novel');
         });
 

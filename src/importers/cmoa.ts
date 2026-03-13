@@ -1,20 +1,17 @@
-import { MetadataImporter, ScrapedMetadata } from './index';
-import { fetchExternalJson } from '../platform';
+import { BaseImporter } from './base';
+import { ScrapedMetadata } from './index';
 
-export class CmoaImporter implements MetadataImporter {
+export class CmoaImporter extends BaseImporter {
     name = "Cmoa";
     supportedContentTypes = ["Reading", "Manga"];
-    matchUrl(url: string, contentType: string): boolean {
-        // We only allow Cmoa urls. They can be for Reading/Manga
-        return this.supportedContentTypes.includes(contentType) && url.includes("cmoa.jp/");
+    matchUrl(url: string, _contentType?: string): boolean {
+        return url.includes("cmoa.jp/");
     }
 
     async fetch(url: string): Promise<ScrapedMetadata> {
-        const html = await fetchExternalJson(url, "GET");
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+        const doc = await this.fetchHtml(url);
 
-        const extraData: Record<string, string> = { "Cmoa Source": url };
+        const extraData = this.createExtraData(url);
         const description = this.extractDescription(doc);
         const coverImageUrl = this.extractCoverImage(doc);
         

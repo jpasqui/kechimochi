@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BookmeterImporter } from '../../src/importers/bookmeter';
 import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('@tauri-apps/api/core', () => ({
-    invoke: vi.fn(),
-}));
-
 describe('BookmeterImporter', () => {
     let importer: BookmeterImporter;
 
@@ -16,7 +12,7 @@ describe('BookmeterImporter', () => {
 
     describe('matchUrl', () => {
         it('should match valid Bookmeter URLs', () => {
-            expect(importer.matchUrl('https://bookmeter.com/books/123', 'Novel')).toBe(true);
+            expect(importer.matchUrl('https://bookmeter.com/books/123')).toBe(true);
         });
     });
 

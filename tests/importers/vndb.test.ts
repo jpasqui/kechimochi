@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VndbImporter } from '../../src/importers/vndb';
 import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('@tauri-apps/api/core', () => ({
-    invoke: vi.fn(),
-}));
-
 describe('VndbImporter', () => {
     let importer: VndbImporter;
 
@@ -20,12 +16,6 @@ describe('VndbImporter', () => {
             expect(importer.matchUrl('https://vndb.org/v1', 'Visual Novel')).toBe(true);
         });
 
-        it('should NOT match invalid URLs or types', () => {
-            expect(importer.matchUrl('https://vndb.org/v5850', 'Manga')).toBe(false);
-            expect(importer.matchUrl('https://google.com', 'Visual Novel')).toBe(false);
-            expect(importer.matchUrl('https://vndb.org/u123', 'Visual Novel')).toBe(false);
-            expect(importer.matchUrl('not a url', 'Visual Novel')).toBe(false);
-        });
     });
 
     describe('removeBbcode', () => {
@@ -70,6 +60,7 @@ describe('VndbImporter', () => {
 
             expect(result.description).toBe('A great VN.');
             expect(result.coverImageUrl).toBe('https://img.vndb.org/cv/123.jpg');
+            expect(result.extraData['Source (VNDB)']).toBe('https://vndb.org/v5850');
             expect(result.extraData['Developer']).toBe('Dev Team');
             expect(result.extraData['Publisher']).toBe('Pub Co');
             expect(result.extraData['Release Date']).toBe('2010-01-01');

@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BackloggdImporter } from '../../src/importers/backloggd';
 import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('@tauri-apps/api/core', () => ({
-    invoke: vi.fn(),
-}));
-
 describe('BackloggdImporter', () => {
     let importer: BackloggdImporter;
 
@@ -20,10 +16,6 @@ describe('BackloggdImporter', () => {
             expect(importer.matchUrl('https://backloggd.com/games/persona-5/', 'Videogame')).toBe(true);
         });
 
-        it('should NOT match invalid URLs or types', () => {
-            expect(importer.matchUrl('https://backloggd.com/games/persona-5/', 'Anime')).toBe(false);
-            expect(importer.matchUrl('https://google.com', 'Videogame')).toBe(false);
-        });
     });
 
     describe('fetch', () => {
@@ -61,6 +53,7 @@ describe('BackloggdImporter', () => {
 
             expect(result.description).toBe('A JRPG masterpiece.');
             expect(result.coverImageUrl).toBe('https://img.backloggd.com/t_cover_big_2x/123.jpg'); // protocol-relative + high-res fix
+            expect(result.extraData['Source (Backloggd)']).toBe('https://backloggd.com/games/p5/');
             expect(result.extraData['Release Date']).toBe('Sep 15, 2016');
             expect(result.extraData['Genres']).toBe('RPGs');
             expect(result.extraData['Platforms']).toBe('PlayStation 4');

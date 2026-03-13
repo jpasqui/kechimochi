@@ -1,4 +1,5 @@
-import { ScrapedMetadata, MetadataImporter } from './index';
+import { BaseImporter } from './base';
+import { ScrapedMetadata } from './index';
 import { fetchExternalJson } from '../platform';
 
 interface VndbVn {
@@ -15,12 +16,11 @@ interface VndbRelease {
     producers?: Array<{ name: string, developer: boolean, publisher: boolean }>;
 }
 
-export class VndbImporter implements MetadataImporter {
+export class VndbImporter extends BaseImporter {
     name = "VNDB";
     supportedContentTypes = ["Visual Novel"];
     
-    matchUrl(url: string, contentType: string): boolean {
-        if (!this.supportedContentTypes.includes(contentType)) return false;
+    matchUrl(url: string, _contentType?: string): boolean {
         try {
             const u = new URL(url);
             return u.hostname === "vndb.org" && u.pathname.startsWith("/v") && !Number.isNaN(Number.parseInt(u.pathname.substring(2), 10));
@@ -40,13 +40,12 @@ export class VndbImporter implements MetadataImporter {
 
         const vn = await this.fetchVnDetails(vnId);
         const release = await this.fetchEarliestRelease(vnId);
-
-        const extraData: Record<string, string> = {
-            "Source URL": url,
+        
+        const extraData = this.createExtraData(url, {
             "Release Date": release.releaseDate,
             "Developer": release.developer,
             "Publisher": release.publisher
-        };
+        });
 
         if (vn.platforms?.length) {
             extraData["Platforms"] = vn.platforms.join(", ").toUpperCase();

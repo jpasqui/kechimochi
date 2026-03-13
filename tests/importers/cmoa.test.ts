@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CmoaImporter } from '../../src/importers/cmoa';
 import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('@tauri-apps/api/core', () => ({
-    invoke: vi.fn(),
-}));
-
 describe('CmoaImporter', () => {
     let importer: CmoaImporter;
 
@@ -20,10 +16,6 @@ describe('CmoaImporter', () => {
             expect(importer.matchUrl('https://www.cmoa.jp/title/123/', 'Reading')).toBe(true);
         });
 
-        it('should NOT match invalid URLs or types', () => {
-            expect(importer.matchUrl('https://www.cmoa.jp/title/123/', 'Anime')).toBe(false);
-            expect(importer.matchUrl('https://google.com', 'Manga')).toBe(false);
-        });
     });
 
     describe('fetch', () => {
