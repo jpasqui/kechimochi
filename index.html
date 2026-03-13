@@ -36,20 +36,21 @@
           <a class="nav-link" data-view="media">Library</a>
           <a class="nav-link" data-view="profile">Profile</a>
         </nav>
-        
-        <div style="flex: 1"></div>
-        
-        <div style="display: flex; gap: 0.75rem; align-items: center;">
+
+        <div id="nav-spacer"></div>
+
+        <div id="nav-controls-row">
           <div class="dev-build-label" id="dev-build-badge" style="display: none;">Development Build</div>
-          <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-dark); padding: 0.2rem 0.5rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <div id="nav-profile-controls" style="background: var(--bg-dark); padding: 0.2rem 0.5rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
              <select id="select-profile" style="border: none; background: transparent; padding: 0; outline: none; font-size: 0.9rem; font-weight: 500; cursor: pointer;">
                  <option value="default">default</option>
              </select>
              <button class="btn btn-ghost" id="btn-add-profile" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" title="Add new user">+</button>
              <button class="btn btn-ghost" id="btn-delete-profile" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" title="Delete current user">-</button>
           </div>
-          <button class="btn btn-primary" id="btn-add-activity">Log Activity</button>
         </div>
+
+        <button class="btn btn-primary" id="btn-add-activity"><span class="activity-btn-text">Log Activity</span><span class="activity-btn-icon" aria-hidden="true">+</span></button>
       </header>
 
       <!-- Main Content Area -->

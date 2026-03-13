@@ -122,6 +122,43 @@ This will:
 - Compile and launch the Rust backend
 - Open the application window
 
+### 2b. Run as a web app (browser mode)
+
+Kechimochi also supports running in a browser using the web adapter.
+
+Use the combined web start command:
+
+```bash
+npm run web:start
+```
+
+This starts:
+- Vite dev server at `http://localhost:1420`
+- Rust HTTP API server at `http://127.0.0.1:3000`
+
+Then open `http://localhost:1420` in your browser.
+
+If you prefer to run them separately:
+
+```bash
+# Terminal 1
+npm run web:server
+
+# Terminal 2
+npm run web:dev
+```
+
+> [!NOTE]
+> The Vite dev server proxies `/api` to `http://127.0.0.1:3000` by default.
+> You can override the API target with `VITE_API_BASE_URL`.
+
+To build and preview the web frontend:
+
+```bash
+npm run web:build
+npm run preview
+```
+
 ### 3. Build a standalone binary
 
 ```bash

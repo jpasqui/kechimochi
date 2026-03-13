@@ -1,14 +1,14 @@
+import { Logger } from '../../core/logger';
 import { Component } from '../../core/component';
-import { Media, ActivitySummary, Milestone, deleteMedia, updateMedia, getMilestones, addMilestone, deleteMilestone, clearMilestones, downloadAndSaveImage, readFileBytes, getSetting, uploadCoverImage, getLogsForMedia } from '../../api';
-import { customConfirm, customAlert, customPrompt, showAddMilestoneModal, showLogActivityModal, showImportMergeModal, showJitenSearchModal } from '../../modals';
-import { fetchMetadataForUrl, isValidImporterUrl, getAvailableSourcesForContentType } from '../../importers';
 import { html, escapeHTML } from '../../core/html';
-import { open } from '../../utils/dialogs';
+import { Media, ActivitySummary, Milestone, updateMedia, deleteMedia, getSetting, getMilestones, addMilestone, deleteMilestone, clearMilestones, getLogsForMedia, readFileBytes, downloadAndSaveImage } from '../../api';
+import { customAlert, customConfirm, customPrompt, showJitenSearchModal, showImportMergeModal, showAddMilestoneModal, showLogActivityModal } from '../../modals';
+import { isValidImporterUrl, getAvailableSourcesForContentType, fetchMetadataForUrl } from '../../importers';
+import { getServices } from '../../services';
 import { MediaLog } from './MediaLog';
 import { setupCopyButton } from '../../utils/clipboard';
 import { formatHhMm } from '../../utils/time';
-import { Logger } from '../../core/logger';
-import { TRACKING_STATUSES, ACTIVITY_TYPES, MEDIA_STATUS, EXTRA_FIELD_LABELS } from '../../constants';
+import { TRACKING_STATUSES, ACTIVITY_TYPES, MEDIA_STATUS } from '../../constants';
 
 interface MediaDetailState {
     media: Media;
@@ -25,6 +25,7 @@ export class MediaDetail extends Component<MediaDetailState> {
     private readonly onDelete: () => void;
     private readonly mediaList: Media[];
     private readonly currentIndex: number;
+    private readonly onViewportResize: () => void;
 
     constructor(container: HTMLElement, media: Media, logs: ActivitySummary[], mediaList: Media[], currentIndex: number, callbacks: { onBack: () => void, onNext: () => void, onPrev: () => void, onNavigate: (index: number) => void, onDelete: () => void }) {
         super(container, { media, logs, milestones: [], imgSrc: null });
@@ -35,11 +36,13 @@ export class MediaDetail extends Component<MediaDetailState> {
         this.onPrev = callbacks.onPrev;
         this.onNavigate = callbacks.onNavigate;
         this.onDelete = callbacks.onDelete;
+        this.onViewportResize = () => this.syncViewportLayout();
+        globalThis.addEventListener('resize', this.onViewportResize);
     }
 
-    protected onMount() {
-        this.loadImage().catch(e => Logger.error("Failed to load image", e));
-        this.loadMilestones().catch(e => Logger.error("Failed to load milestones", e));
+    protected override onMount() {
+        this.loadImage();
+        this.loadMilestones();
     }
 
     private async loadMilestones() {
@@ -53,17 +56,15 @@ export class MediaDetail extends Component<MediaDetailState> {
 
     private async loadImage() {
         const { cover_image } = this.state.media;
-        if (!cover_image || cover_image.trim() === '') return;
-
-        try {
+        let src: string | null;
+        if (getServices().isDesktop()) {
             const bytes = await readFileBytes(cover_image);
             const blob = new Blob([new Uint8Array(bytes)]);
-            const src = URL.createObjectURL(blob);
-            this.setState({ imgSrc: src });
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.error("Failed to load image", e);
+            src = URL.createObjectURL(blob);
+        } else {
+            src = await getServices().loadCoverImage(cover_image);
         }
+        if (src) this.setState({ imgSrc: src });
     }
 
     private getTrackingStatusClass(status: string): string {
@@ -85,57 +86,57 @@ export class MediaDetail extends Component<MediaDetailState> {
         const detailView = html`
             <div class="animate-fade-in" style="display: flex; flex-direction: column; height: 100%; gap: 1rem;" id="media-root">
                 <!-- Header Controls -->
-                <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; background: var(--bg-dark); padding: 0.5rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <div id="media-detail-header" style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; background: var(--bg-dark); padding: 0.5rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                     <div style="flex: 1; display: flex; justify-content: flex-start;">
                         <button class="btn btn-ghost" id="btn-back-grid" style="font-size: 0.9rem; padding: 0.4rem 0.8rem; display: flex; align-items: center; gap: 0.3rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to Grid</button>
                     </div>
                     
-                    <div style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
+                    <div id="media-detail-nav" style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
                         <button class="btn btn-ghost" id="media-prev" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&lt;&lt;</button>
                         <select id="media-select" style="max-width: 800px; text-align: center; border: none; background: transparent; font-size: 1.1rem; color: var(--text-primary); outline: none; appearance: none; cursor: pointer; text-align-last: center; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
-                             ${this.mediaList.map((m, i) => `<option value="${i}" ${i === this.currentIndex ? 'selected' : ''}>${escapeHTML(m.title)}</option>`).join('')}
+                            ${this.mediaList.map((m, i) => `<option value="${i}" ${i === this.currentIndex ? 'selected' : ''}>${m.title}</option>`).join('')}
                         </select>
                         <button class="btn btn-ghost" id="media-next" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&gt;&gt;</button>
                     </div>
-                    <div style="flex: 1;"></div>
+                    <div id="media-detail-header-spacer" style="flex: 1;"></div>
                 </div>
 
                 <!-- Main Content -->
                 <div id="media-content-area" style="display: flex; gap: 2rem; flex: 1; overflow: hidden;">
                     <!-- Left Column: Cover -->
-                    <div style="flex: 0 0 300px; display: flex; flex-direction: column; min-height: 0;">
-                        ${(() => {
-                            if (imgSrc) {
-                                return html`<img src="${imgSrc}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius-md); cursor: pointer;" id="media-cover-img" alt="Cover" title="Double click to change image" />`;
-                            }
-                            return html`<div style="width: 100%; aspect-ratio: 2/3; background: var(--bg-dark); border: 2px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary);" id="media-cover-img" title="Double click to add image">No Image</div>`;
-                        })()}
-                        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.5rem;">
-                            <button class="btn btn-danger" id="btn-delete-media-detail" style="width: 100%; padding: 0.6rem; font-size: 0.9rem;">Delete Media</button>
+                    <div id="media-cover-column" style="flex: 0 0 300px; display: flex; flex-direction: column; min-height: 0;">
+                        ${imgSrc
+                ? html`<img src="${imgSrc}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius-md); cursor: pointer;" id="media-cover-img" alt="Cover" title="Double click to change image" />`
+                : html`<div style="width: 100%; aspect-ratio: 2/3; background: var(--bg-dark); border: 2px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary);" id="media-cover-img" title="Double click to add image">No Image</div>`
+            }
+                        <div id="media-delete-block" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.5rem;">
+                            <button class="btn" id="btn-delete-media-detail" style="background-color: #ff4757; color: white; border: none; font-weight: bold; width: 100%; padding: 0.6rem; font-size: 0.9rem;">Delete Media</button>
                             <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.2; text-align: center;">
                                 <strong>DANGER:</strong> COMPLETELY REMOVES THIS MEDIA AND <strong>ALL</strong> ASSOCIATED WORK LOGS FOR ALL USERS.
                             </div>
                         </div>
 
-                        <!-- Milestones -->
-                        <div class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color); flex: 1; min-height: 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.2rem;">
-                                <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
-                                <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
-                            </div>
-                            <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; overflow-y: auto;">
-                                ${this.renderMilestones()}
-                            </div>
-                            ${this.state.milestones.length > 0 ? html`
-                                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
-                                    <button class="btn btn-ghost" id="btn-clear-milestones" style="padding: 0.2rem 0.4rem; font-size: 0.6rem; border-radius: 4px; color: var(--accent-red); opacity: 0.6; font-weight: 500;">Delete all milestones</button>
+                        <div id="media-milestones-slot-left">
+                            <!-- Milestones -->
+                            <div id="media-milestones-card" class="card" style="margin-top: 1.5rem; padding: 0.5rem; display: flex; flex-direction: column; border: 1px solid var(--border-color); flex: 1; min-height: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.2rem;">
+                                    <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
+                                    <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
                                 </div>
-                            ` : ''}
+                                <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-height: 0; max-height: 400px; overflow-y: auto;">
+                                    ${this.renderMilestones()}
+                                </div>
+                                ${this.state.milestones.length > 0 ? html`
+                                    <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                                        <button class="btn btn-ghost" id="btn-clear-milestones" style="padding: 0.2rem 0.4rem; font-size: 0.6rem; border-radius: 4px; color: var(--accent-red); opacity: 0.6; font-weight: 500;">Delete all milestones</button>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
 
                     <!-- Right Column: Details -->
-                    <div style="flex: 1; display: flex; flex-direction: column; gap: 1rem; min-height: 0;">
+                    <div id="media-detail-column" style="flex: 1; display: flex; flex-direction: column; gap: 1rem; min-height: 0;">
                         <div>
                             <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
                                 <h1 id="media-title" title="Double click to edit title" style="margin: 0; font-size: 2rem; cursor: pointer;">${escapeHTML(media.title)}</h1>
@@ -162,17 +163,17 @@ export class MediaDetail extends Component<MediaDetailState> {
                                     <span id="status-label" style="font-weight: 600; font-size: 0.75rem; text-transform: uppercase;">${this.isActive(media.status) ? MEDIA_STATUS.ACTIVE : MEDIA_STATUS.ARCHIVED}</span>
                                 </span>
                                 <button class="btn btn-ghost" id="btn-search-jiten" style="padding: 0.2rem 0.8rem; font-size: 0.75rem; border-color: var(--accent-purple); color: var(--accent-purple); border-radius: 12px; height: 1.6rem; margin-left: 0.5rem;">Search on Jiten.moe</button>
-                                 ${media.tracking_status === 'Complete' ? '' : html`<button class="btn btn-ghost" id="btn-mark-complete" style="padding: 0.2rem 0.8rem; font-size: 0.75rem; border-color: var(--accent-green); color: var(--accent-green); border-radius: 12px; height: 1.6rem; margin-left: 0.5rem;">Mark as complete</button>`}
+                                ${media.tracking_status === 'Complete' ? '' : html`<button class="btn btn-ghost" id="btn-mark-complete" style="padding: 0.2rem 0.8rem; font-size: 0.75rem; border-color: var(--accent-green); color: var(--accent-green); border-radius: 12px; height: 1.6rem; margin-left: 0.5rem;">Mark as complete</button>`}
                             </div>
                         </div>
 
-                        <div class="card" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
+                        <div class="card" style="display: flex; flex-direction: column; gap: 0.5rem;">
                             <h4 style="margin: 0; color: var(--text-secondary);">Description</h4>
-                            <div id="media-description" class="editable-field" title="Double click to edit description" style="cursor: pointer; white-space: pre-wrap; min-height: 1.5rem;">${media.description ? escapeHTML(media.description) : 'No description provided. Double click here to add one.'}</div>
+                            <div id="media-description" title="Double click to edit description" style="cursor: pointer; white-space: pre-wrap;">${media.description || 'No description provided. Double click here to add one.'}</div>
                         </div>
 
                         <!-- Stats & Extra Fields -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                        <div id="media-stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
                             <div class="card" id="media-first-last-stats" style="grid-column: span 3; display: none; justify-content: flex-start; gap: 2rem; padding: 0.5rem 1rem; font-size: 0.85rem;"></div>
                             ${this.getExtraDataHtml(media)}
                         </div>
@@ -182,6 +183,8 @@ export class MediaDetail extends Component<MediaDetailState> {
                             ${getAvailableSourcesForContentType(media.content_type || "Unknown").length > 0 ? html`<button class="btn btn-ghost btn-meta-fetch" id="btn-import-meta" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Fetch Metadata from URL</button>` : ''}
                             <button class="btn btn-ghost btn-meta-clear" id="btn-clear-meta" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Clear Metadata</button>
                         </div>
+
+                        <div id="media-milestones-slot-main"></div>
 
                         <!-- Activity Logs -->
                         <div class="card" style="margin-top: 1rem; flex: 1; display: flex; flex-direction: column; min-height: 0;">
@@ -197,11 +200,67 @@ export class MediaDetail extends Component<MediaDetailState> {
         `;
 
         this.container.appendChild(detailView);
+        this.syncViewportLayout();
         this.setupListeners(detailView);
         this.renderStats(detailView);
 
         const logsContainer = detailView.querySelector('#media-logs-container') as HTMLElement;
         new MediaLog(logsContainer, logs).render();
+    }
+
+    private placeMilestonesCard() {
+        const card = this.container.querySelector<HTMLElement>('#media-milestones-card');
+        const leftSlot = this.container.querySelector<HTMLElement>('#media-milestones-slot-left');
+        const mainSlot = this.container.querySelector<HTMLElement>('#media-milestones-slot-main');
+        if (!card || !leftSlot || !mainSlot) return;
+
+        const useMainColumn = globalThis.matchMedia('(max-width: 1024px)').matches;
+        (useMainColumn ? mainSlot : leftSlot).appendChild(card);
+    }
+
+    private syncViewportLayout() {
+        this.placeMilestonesCard();
+        this.adjustDesktopCoverSize();
+    }
+
+    private adjustDesktopCoverSize() {
+        const coverEl = this.container.querySelector<HTMLElement>('#media-cover-img');
+        const coverColumn = this.container.querySelector<HTMLElement>('#media-cover-column');
+        const deleteBlock = this.container.querySelector<HTMLElement>('#media-delete-block');
+        const milestonesCard = this.container.querySelector<HTMLElement>('#media-milestones-card');
+        if (!coverEl || !coverColumn || !deleteBlock || !milestonesCard) return;
+
+        const isDesktop = globalThis.matchMedia('(min-width: 1025px)').matches;
+        if (!isDesktop) {
+            coverEl.style.height = '';
+            coverEl.style.width = '';
+            coverEl.style.maxWidth = '';
+            coverEl.style.margin = '';
+            coverEl.style.aspectRatio = '';
+            return;
+        }
+
+        const deleteStyles = getComputedStyle(deleteBlock);
+        const milestoneStyles = getComputedStyle(milestonesCard);
+        const deleteOuter = deleteBlock.offsetHeight + Number.parseFloat(deleteStyles.marginTop || '0');
+        const milestoneOuter = milestonesCard.offsetHeight + Number.parseFloat(milestoneStyles.marginTop || '0');
+        const availableForCover = coverColumn.clientHeight - deleteOuter - milestoneOuter - 8;
+        if (availableForCover <= 0) return;
+
+        const currentCoverHeight = coverEl.getBoundingClientRect().height;
+        if (currentCoverHeight > availableForCover) {
+            coverEl.style.height = `${Math.floor(availableForCover)}px`;
+            coverEl.style.width = 'auto';
+            coverEl.style.maxWidth = '100%';
+            coverEl.style.margin = '0 auto';
+            coverEl.style.aspectRatio = '2 / 3';
+        } else {
+            coverEl.style.height = '';
+            coverEl.style.width = '';
+            coverEl.style.maxWidth = '';
+            coverEl.style.margin = '';
+            coverEl.style.aspectRatio = '';
+        }
     }
 
     private renderMilestones(): string {
@@ -232,15 +291,10 @@ export class MediaDetail extends Component<MediaDetailState> {
     private getContentTypeOptions(media: Media): string {
         const validOptions: string[] = ['Unknown'];
         const mType = media.media_type;
-        if (mType === 'Reading') {
-            validOptions.push('Visual Novel', 'Manga', 'Novel', 'WebNovel', 'NonFiction');
-        } else if (mType === 'Playing') {
-            validOptions.push('Videogame');
-        } else if (mType === 'Listening') {
-            validOptions.push('Audio');
-        } else if (mType === 'Watching') {
-            validOptions.push('Anime', 'Movie', 'Youtube Video', 'Livestream', 'Drama');
-        }
+        if (mType === 'Reading') validOptions.push('Visual Novel', 'Manga', 'Novel', 'WebNovel', 'NonFiction');
+        else if (mType === 'Playing') validOptions.push('Videogame');
+        else if (mType === 'Listening') validOptions.push('Audio');
+        else if (mType === 'Watching') validOptions.push('Anime', 'Movie', 'Youtube Video', 'Livestream', 'Drama');
         return validOptions.map(opt => `<option value="${opt}" ${opt === media.content_type ? 'selected' : ''}>${opt}</option>`).join('');
     }
 
@@ -249,8 +303,7 @@ export class MediaDetail extends Component<MediaDetailState> {
         try {
             extraData = JSON.parse(media.extra_data || "{}");
         } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn("Could not parse extra data", e);
+            Logger.warn("Could not parse extra data", e);
         }
 
         const sortedEntries = Object.entries(extraData).sort((a, b) => {
@@ -281,6 +334,45 @@ export class MediaDetail extends Component<MediaDetailState> {
         }).join('');
     }
 
+    private async computeReadingSpeedHtml(media: Media, totalMin: number): Promise<string> {
+        try {
+            const extra = JSON.parse(media.extra_data || "{}");
+            const charRaw = extra["Character count"] || "";
+            const charCount = Number.parseInt(charRaw.replaceAll(',', ''), 10);
+            if (Number.isNaN(charCount) || charCount <= 0) return "";
+
+            if (media.tracking_status === 'Complete') {
+                const speed = Math.round(charCount / (totalMin / 60));
+                return `<span style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. Reading Speed: <strong style="color: var(--text-primary);">${speed.toLocaleString()} char/hr</strong></span>`;
+            }
+
+            let speedKey = "";
+            if (media.content_type === "Novel") speedKey = "stats_novel_speed";
+            else if (media.content_type === "Manga") speedKey = "stats_manga_speed";
+            else if (media.content_type === "Visual Novel") speedKey = "stats_vn_speed";
+            if (!speedKey) return "";
+
+            const avgSpeedStr = await getSetting(speedKey);
+            const avgSpeed = Number.parseInt(avgSpeedStr || "0", 10);
+            if (avgSpeed <= 0) return "";
+
+            const estTotalMin = (charCount / avgSpeed) * 60;
+            const totalEstTotalMin = Math.round(estTotalMin);
+            const estRemainingMin = Math.max(0, totalEstTotalMin - totalMin);
+            const completionRate = Math.min(100, Math.round((totalMin / estTotalMin) * 100));
+            const remStr = formatHhMm(estRemainingMin);
+            const totalEstStr = formatHhMm(totalEstTotalMin);
+
+            return `
+                <span id="est-remaining-time" style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. remaining time: <strong style="color: var(--text-primary);">${remStr}</strong> (<strong style="color: var(--text-primary);">${totalEstStr}</strong> total)</span>
+                <span id="est-completion-rate" style="margin-left: 1rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. completion rate: <strong style="color: var(--text-primary);">${completionRate}%</strong></span>
+            `;
+        } catch (e) {
+            Logger.warn("Could not compute reading speed stats", e);
+            return "";
+        }
+    }
+
     private async renderStats(root: HTMLElement) {
         const statsDiv = root.querySelector('#media-first-last-stats') as HTMLElement;
         const { logs, media } = this.state;
@@ -294,14 +386,15 @@ export class MediaDetail extends Component<MediaDetailState> {
         const totalMin = logs.reduce((acc, log) => acc + log.duration_minutes, 0);
         const totalStr = formatHhMm(totalMin);
 
-        const verb = this.getMediaVerb(media.media_type);
-        const totalLabel = this.getTotalTimeLabel(media.media_type);
+        let verb = "Logged";
+        let totalLabel = "Total Time";
+        if (media.media_type === "Playing") { verb = "Played"; totalLabel = "Total Playtime"; }
+        else if (media.media_type === "Listening") { verb = "Listened"; totalLabel = "Total Listening Time"; }
+        else if (media.media_type === "Watching") { verb = "Watched"; totalLabel = "Total Watchtime"; }
+        else if (media.media_type === "Reading") { verb = "Read"; totalLabel = "Total Readtime"; }
 
-        let readingSpeedHtml = "";
         const isReadingType = ["Novel", "Visual Novel", "Manga", "WebNovel", "NonFiction"].includes(media.content_type || "");
-        if (isReadingType && totalMin > 0) {
-            readingSpeedHtml = await this.calculateReadingStats(media, totalMin);
-        }
+        const readingSpeedHtml = isReadingType && totalMin > 0 ? await this.computeReadingSpeedHtml(media, totalMin) : "";
 
         statsDiv.innerHTML = `
             <span style="color: var(--text-secondary);">First ${verb}: <strong style="color: var(--text-primary);">${firstLogDate}</strong></span>
@@ -310,74 +403,6 @@ export class MediaDetail extends Component<MediaDetailState> {
             ${readingSpeedHtml}
         `;
     }
-
-    private getMediaVerb(mediaType: string): string {
-        switch (mediaType) {
-            case "Playing": return "Played";
-            case "Listening": return "Listened";
-            case "Watching": return "Watched";
-            case "Reading": return "Read";
-            default: return "Logged";
-        }
-    }
-
-    private getTotalTimeLabel(mediaType: string): string {
-        switch (mediaType) {
-            case "Playing": return "Total Playtime";
-            case "Listening": return "Total Listening Time";
-            case "Watching": return "Total Watchtime";
-            case "Reading": return "Total Readtime";
-            default: return "Total Time";
-        }
-    }
-
-    private async calculateReadingStats(media: Media, totalMin: number): Promise<string> {
-        try {
-            const extra = JSON.parse(media.extra_data || "{}");
-            const charRaw = extra[EXTRA_FIELD_LABELS.CHARACTER_COUNT] || "";
-            const charCount = Number.parseInt(charRaw.replaceAll(',', ''), 10);
-            if (Number.isNaN(charCount) || charCount <= 0) return "";
-
-            if (media.tracking_status === 'Complete') {
-                const speed = Math.round(charCount / (totalMin / 60));
-                return `<span style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. Reading Speed: <strong style="color: var(--text-primary);">${speed.toLocaleString()} char/hr</strong></span>`;
-            }
-
-            return await this.calculateRemainingTime(media, charCount, totalMin);
-        } catch (error) {
-            // Silently fail and return empty string if stats calculation fails
-            // eslint-disable-next-line no-console
-            console.error("Failed to calculate reading stats:", error);
-            return "";
-        }
-    }
-
-    private async calculateRemainingTime(media: Media, charCount: number, totalMin: number): Promise<string> {
-        let speedKey = "";
-        if (media.content_type === "Novel") speedKey = "stats_novel_speed";
-        else if (media.content_type === "Manga") speedKey = "stats_manga_speed";
-        else if (media.content_type === "Visual Novel") speedKey = "stats_vn_speed";
-
-        if (!speedKey) return "";
-
-        const avgSpeedStr = await getSetting(speedKey);
-        const avgSpeed = Number.parseInt(avgSpeedStr || "0", 10);
-        if (avgSpeed <= 0) return "";
-
-        const estTotalMin = (charCount / avgSpeed) * 60;
-        const totalEstTotalMin = Math.round(estTotalMin);
-        const estRemainingMin = Math.max(0, totalEstTotalMin - totalMin);
-        const completionRate = Math.min(100, Math.round((totalMin / estTotalMin) * 100));
-
-        const remStr = formatHhMm(estRemainingMin);
-        const totalEstStr = formatHhMm(totalEstTotalMin);
-
-        return `
-            <span id="est-remaining-time" style="margin-left: 2rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. remaining time: <strong style="color: var(--text-primary);">${remStr}</strong> (<strong style="color: var(--text-primary);">${totalEstStr}</strong> total)</span>
-            <span id="est-completion-rate" style="margin-left: 1rem; color: var(--accent-yellow); font-weight: 800; border: 1px solid var(--accent-yellow); padding: 0.2rem 0.6rem; border-radius: 4px; background: rgba(0,0,0,0.2);">Est. completion rate: <strong style="color: var(--text-primary);">${completionRate}%</strong></span>
-        `;
-    }
-
     private setupListeners(root: HTMLElement) {
         root.querySelector('#btn-back-grid')?.addEventListener('click', this.onBack);
         root.querySelector('#media-next')?.addEventListener('click', this.onNext);
@@ -385,18 +410,14 @@ export class MediaDetail extends Component<MediaDetailState> {
         root.querySelector('#media-select')?.addEventListener('change', (e) => this.onNavigate(Number.parseInt((e.target as HTMLSelectElement).value, 10)));
 
         root.querySelector('#media-cover-img')?.addEventListener('dblclick', async () => {
-            const selected = await open({
-                multiple: false,
-                filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
-            });
-            if (selected && typeof selected === 'string') {
-                try {
-                    const newPath = await uploadCoverImage(this.state.media.id!, selected);
+            try {
+                const newPath = await getServices().pickAndUploadCover(this.state.media.id!);
+                if (newPath) {
                     this.state.media.cover_image = newPath;
                     await this.loadImage();
-                } catch (e) {
-                    await customAlert("Error", "Failed to upload image: " + e);
                 }
+            } catch (e) {
+                await customAlert("Error", "Failed to upload image: " + e);
             }
         });
 
@@ -408,26 +429,77 @@ export class MediaDetail extends Component<MediaDetailState> {
             if (jitenUrl) await this.performMetadataImport(jitenUrl, "Jiten Source");
         });
 
+        const onSave = async (field: string, value: string, isExtra: boolean = false) => {
+            if (isExtra) {
+                const extraData = JSON.parse(this.state.media.extra_data || "{}");
+                extraData[field] = value;
+                this.state.media.extra_data = JSON.stringify(extraData);
+            } else {
+                (this.state.media as unknown as Record<string, unknown>)[field] = value;
+            }
+            await updateMedia(this.state.media);
+            this.render();
+        };
+
+        const onRenameKey = async (oldKey: string, newKey: string) => {
+            if (!newKey || newKey === oldKey) {
+                this.render();
+                return;
+            }
+            const extraData = JSON.parse(this.state.media.extra_data || "{}");
+            const val = extraData[oldKey];
+            delete extraData[oldKey];
+            extraData[newKey] = val;
+            this.state.media.extra_data = JSON.stringify(extraData);
+            await updateMedia(this.state.media);
+            this.render();
+        };
 
         const setupEditable = (el: HTMLElement, field: string, options: { isExtra?: boolean, isTextArea?: boolean, isRenameKey?: boolean } = {}) => {
             el.addEventListener('dblclick', () => {
-                let currentVal: string;
+                let currentVal: string | null;
                 if (options.isRenameKey) {
                     currentVal = field;
                 } else if (options.isExtra) {
-                    currentVal = el.textContent === '-' ? '' : el.textContent || '';
+                    currentVal = el.textContent === '-' ? '' : el.textContent;
                 } else {
                     currentVal = (this.state.media[field as keyof Media] as string) || '';
                 }
-                const input = this.createEditInput(currentVal, options);
-                
+                const input = document.createElement(options.isTextArea ? 'textarea' : 'input');
+                if (!options.isTextArea) (input as HTMLInputElement).type = 'text';
+                input.className = 'edit-input';
+                input.value = currentVal || '';
+                input.style.width = '100%';
+                if (options.isTextArea) {
+                    input.style.height = '150px';
+                    input.style.resize = 'vertical';
+                }
+                input.style.background = 'var(--bg-dark)';
+                input.style.color = options.isRenameKey ? 'var(--text-secondary)' : 'var(--text-primary)';
+
+                input.style.border = '1px solid var(--accent-green)';
+                input.style.padding = '0.2rem 0.5rem';
+                input.style.fontSize = options.isRenameKey ? '0.7rem' : 'inherit';
+                if (options.isRenameKey) input.style.textTransform = 'uppercase';
+
                 const save = async () => {
                     const newVal = input.value.trim();
-                    if (options.isRenameKey) await this.onRenameKey(field, newVal);
-                    else await this.onSave(field, newVal, !!options.isExtra);
+                    if (options.isRenameKey) {
+                        await onRenameKey(field, newVal);
+                    } else {
+                        await onSave(field, newVal, !!options.isExtra);
+                    }
                 };
 
-                this.attachEditInputListeners(input, save, options.isTextArea);
+                input.addEventListener('blur', save);
+                input.addEventListener('keydown', ((ev: KeyboardEvent) => {
+                    if (ev.key === 'Enter' && !options.isTextArea) input.blur();
+                    if (ev.key === 'Escape') {
+                        input.removeEventListener('blur', save);
+                        this.render();
+                    }
+                }) as EventListener);
+
                 el.replaceWith(input);
                 input.focus();
                 if (!options.isTextArea) (input as HTMLInputElement).select();
@@ -565,7 +637,7 @@ export class MediaDetail extends Component<MediaDetailState> {
 
         root.querySelectorAll('.delete-milestone-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = Number.parseInt((e.currentTarget as HTMLElement).dataset.id || "0");
+                const id = Number.parseInt((e.currentTarget as HTMLElement).dataset.id || "0", 10);
                 if (id && await customConfirm("Delete Milestone", "Are you sure you want to delete this milestone?")) {
                     try {
                         await deleteMilestone(id);
@@ -620,8 +692,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                     this.state.media.cover_image = newPath;
                     await this.loadImage(); // Reload blob URL for the new image
                 } catch (err) {
-                    // eslint-disable-next-line no-console
-                    console.error("Failed to download new cover", err);
+                    Logger.error("Failed to download new cover", err);
                 }
             }
 
@@ -633,75 +704,5 @@ export class MediaDetail extends Component<MediaDetailState> {
         } catch (e) {
             await customAlert("Import Failed", "Metadata import failed: " + e);
         }
-    }
-
-    private async onSave(field: keyof Media | (string & {}), value: string, isExtra: boolean = false) {
-        if (isExtra) {
-            const extraData = JSON.parse(this.state.media.extra_data || "{}");
-            extraData[field] = value;
-            this.state.media.extra_data = JSON.stringify(extraData);
-        } else {
-            (this.state.media as unknown as Record<string, unknown>)[field] = value;
-        }
-        await updateMedia(this.state.media);
-        this.render();
-    }
-
-    private async onRenameKey(oldKey: string, newKey: string) {
-        if (!newKey || newKey === oldKey) {
-            this.render();
-            return;
-        }
-        const extraData = JSON.parse(this.state.media.extra_data || "{}");
-        const val = extraData[oldKey];
-        delete extraData[oldKey];
-        extraData[newKey] = val;
-        this.state.media.extra_data = JSON.stringify(extraData);
-        await updateMedia(this.state.media);
-        this.render();
-    }
-
-    private createEditInput(currentVal: string, options: { isExtra?: boolean, isTextArea?: boolean, isRenameKey?: boolean }): HTMLInputElement | HTMLTextAreaElement {
-        const input = document.createElement(options.isTextArea ? 'textarea' : 'input');
-        if (!options.isTextArea) (input as HTMLInputElement).type = 'text';
-        
-        input.className = 'edit-input';
-        input.value = currentVal;
-        
-        this.applyEditInputStyles(input, options);
-        return input;
-    }
-
-    private applyEditInputStyles(input: HTMLElement, options: { isRenameKey?: boolean, isTextArea?: boolean, isExtra?: boolean }) {
-        input.style.width = '100%';
-        if (options.isTextArea) {
-            input.style.height = '150px';
-            input.style.resize = 'vertical';
-        }
-        input.style.background = 'var(--bg-dark)';
-        input.style.border = '1px solid var(--accent-green)';
-        input.style.padding = '0.2rem 0.5rem';
-        input.style.fontSize = options.isRenameKey ? '0.7rem' : 'inherit';
-        
-        // Color logic
-        let color = 'var(--text-primary)';
-        if (options.isRenameKey || options.isExtra) color = 'var(--text-secondary)';
-        if (!options.isRenameKey && !options.isTextArea) color = 'var(--text-primary)';
-        input.style.color = color;
-
-        if (options.isRenameKey) {
-            (input as HTMLInputElement).style.textTransform = 'uppercase';
-        }
-    }
-
-    private attachEditInputListeners(input: HTMLInputElement | HTMLTextAreaElement, save: () => Promise<void>, isTextArea?: boolean) {
-        input.addEventListener('blur', save);
-        input.addEventListener('keydown', ((ev: KeyboardEvent) => {
-            if (ev.key === 'Enter' && !isTextArea) input.blur();
-            if (ev.key === 'Escape') {
-                input.removeEventListener('blur', save);
-                this.render();
-            }
-        }) as EventListener);
     }
 }

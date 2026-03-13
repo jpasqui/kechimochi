@@ -1,7 +1,30 @@
-import { invoke } from '@tauri-apps/api/core';
-import { getVersion } from '@tauri-apps/api/app';
+/**
+ * Public API surface for all application data and platform operations.
+ *
+ * All primary functions delegate to the active service adapter (desktop or web).
+ * Legacy file-path-based exports are kept for desktop backwards compatibility.
+ */
+import { getServices } from './services';
 
-declare const __APP_GIT_HASH__: string;
+export type {
+  Media,
+  ActivityLog,
+  ActivitySummary,
+  DailyHeatmap,
+  MediaCsvRow,
+  MediaConflict,
+  Milestone,
+} from './types';
+
+import type {
+  Media,
+  ActivityLog,
+  ActivitySummary,
+  DailyHeatmap,
+  MediaCsvRow,
+  MediaConflict,
+  Milestone,
+} from './types';
 
 declare global {
   interface Window {
@@ -9,205 +32,76 @@ declare global {
   }
 }
 
-export interface MediaCsvRow {
-    "Title": string;
-    "Media Type": string;
-    "Status": string;
-    "Language": string;
-    "Description": string;
-    "Content Type": string;
-    "Extra Data": string;
-    "Cover Image (Base64)": string;
+async function desktopInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
+  if (!getServices().isDesktop()) {
+    throw new Error(`${command} is not supported in web mode.`);
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(command, args);
 }
 
-export interface MediaConflict {
-    incoming: MediaCsvRow;
-    existing?: Media;
-}
+export function getAllMedia(): Promise<Media[]> { return getServices().getAllMedia(); }
+export function addMedia(media: Media): Promise<number> { return getServices().addMedia(media); }
+export function updateMedia(media: Media): Promise<void> { return getServices().updateMedia(media); }
+export function deleteMedia(id: number): Promise<void> { return getServices().deleteMedia(id); }
 
-export interface Media {
-  id?: number;
-  title: string;
-  media_type: string;
-  status: string;
-  language: string;
-  description: string;
-  cover_image: string;
-  extra_data: string;
-  content_type: string;
-  tracking_status: string;
-}
+export function addLog(log: ActivityLog): Promise<number> { return getServices().addLog(log); }
+export function deleteLog(id: number): Promise<void> { return getServices().deleteLog(id); }
+export function getLogs(): Promise<ActivitySummary[]> { return getServices().getLogs(); }
+export function getHeatmap(): Promise<DailyHeatmap[]> { return getServices().getHeatmap(); }
+export function getLogsForMedia(mediaId: number): Promise<ActivitySummary[]> { return getServices().getLogsForMedia(mediaId); }
 
-export interface ActivityLog {
-  id?: number;
-  media_id: number;
-  duration_minutes: number;
-  date: string;
-}
+export function switchProfile(profileName: string): Promise<void> { return getServices().switchProfile(profileName); }
+export function clearActivities(): Promise<void> { return getServices().clearActivities(); }
+export function wipeEverything(): Promise<void> { return getServices().wipeEverything(); }
+export function deleteProfile(profileName: string): Promise<void> { return getServices().deleteProfile(profileName); }
+export function listProfiles(): Promise<string[]> { return getServices().listProfiles(); }
 
-export interface Milestone {
-  id?: number;
-  media_title: string;
-  name: string;
-  duration: number; // minutes
-  date?: string; // YYYY-MM-DD
-}
+export function getSetting(key: string): Promise<string | null> { return getServices().getSetting(key); }
+export function setSetting(key: string, value: string): Promise<void> { return getServices().setSetting(key, value); }
 
-export interface ActivitySummary {
-  id: number;
-  media_id: number;
-  title: string;
-  media_type: string;
-  duration_minutes: number;
-  date: string;
-  language: string;
-}
+export function getUsername(): Promise<string> { return getServices().getUsername(); }
+export function getAppVersion(): Promise<string> { return getServices().getAppVersion(); }
 
-export interface DailyHeatmap {
-  date: string;
-  total_minutes: number;
-}
+export function applyMediaImport(records: MediaCsvRow[]): Promise<number> { return getServices().applyMediaImport(records); }
 
-export async function getAllMedia(): Promise<Media[]> {
-  return await invoke('get_all_media');
-}
-
-export async function addMedia(media: Media): Promise<number> {
-  return await invoke('add_media', { media });
-}
-
-export async function updateMedia(media: Media): Promise<void> {
-  return await invoke('update_media', { media });
-}
-
-export async function deleteMedia(id: number): Promise<void> {
-  return await invoke('delete_media', { id });
-}
-
-export async function addLog(log: ActivityLog): Promise<number> {
-  return await invoke('add_log', { log });
-}
-
-export async function deleteLog(id: number): Promise<void> {
-  return await invoke('delete_log', { id });
-}
-
-export async function getLogs(): Promise<ActivitySummary[]> {
-  return await invoke('get_logs');
-}
-
-export async function getHeatmap(): Promise<DailyHeatmap[]> {
-  return await invoke('get_heatmap');
-}
-
-export async function importCsv(filePath: string): Promise<number> {
-  return await invoke('import_csv', { filePath });
-}
-
-export async function switchProfile(profileName: string): Promise<void> {
-  return await invoke('switch_profile', { profileName });
-}
-
-export async function clearActivities(): Promise<void> {
-  return await invoke('clear_activities');
-}
-
-export async function wipeEverything(): Promise<void> {
-  return await invoke('wipe_everything');
-}
-
-export async function deleteProfile(profileName: string): Promise<void> {
-  return await invoke('delete_profile', { profileName });
-}
-
-export async function listProfiles(): Promise<string[]> {
-  return await invoke('list_profiles');
-}
-
-export async function exportCsv(filePath: string, startDate?: string, endDate?: string): Promise<number> {
-  return await invoke('export_csv', { filePath, startDate, endDate });
-}
-
-export async function exportMediaCsv(filePath: string): Promise<number> {
-  return await invoke('export_media_csv', { filePath });
-}
-
-export async function analyzeMediaCsv(filePath: string): Promise<MediaConflict[]> {
-  return await invoke('analyze_media_csv', { filePath });
-}
-
-export async function applyMediaImport(records: MediaCsvRow[]): Promise<number> {
-  return await invoke('apply_media_import', { records });
-}
-
-export async function getLogsForMedia(mediaId: number): Promise<ActivitySummary[]> {
-    return await invoke('get_logs_for_media', { mediaId });
-}
-
-export async function getMilestones(mediaTitle: string): Promise<Milestone[]> {
-  return await invoke('get_milestones', { mediaTitle });
-}
-
-export async function addMilestone(milestone: Milestone): Promise<number> {
-  return await invoke('add_milestone', { milestone });
-}
-
-export async function deleteMilestone(id: number): Promise<void> {
-  return await invoke('delete_milestone', { id });
-}
-
-export async function updateMilestone(milestone: Milestone): Promise<void> {
-  return await invoke('update_milestone', { milestone });
-}
-
-export async function clearMilestones(mediaTitle: string): Promise<void> {
-  return await invoke('delete_milestones_for_media', { mediaTitle });
-}
-
-export async function exportMilestonesCsv(filePath: string): Promise<number> {
-  return await invoke('export_milestones_csv', { filePath });
-}
-
-export async function importMilestonesCsv(filePath: string): Promise<number> {
-  return await invoke('import_milestones_csv', { filePath });
-}
-
-export async function uploadCoverImage(mediaId: number, path: string): Promise<string> {
-  return await invoke('upload_cover_image', { mediaId, path });
-}
-
-export async function readFileBytes(path: string): Promise<number[]> {
-  return await invoke('read_file_bytes', { path });
-}
+export function getMilestones(mediaTitle: string): Promise<Milestone[]> { return getServices().getMilestones(mediaTitle); }
+export function addMilestone(milestone: Milestone): Promise<number> { return getServices().addMilestone(milestone); }
+export function updateMilestone(milestone: Milestone): Promise<void> { return getServices().updateMilestone(milestone); }
+export function deleteMilestone(id: number): Promise<void> { return getServices().deleteMilestone(id); }
+export function clearMilestones(mediaTitle: string): Promise<void> { return getServices().clearMilestones(mediaTitle); }
+export function exportMilestonesCsv(filePath: string): Promise<number> { return getServices().exportMilestonesCsv(filePath); }
+export function importMilestonesCsv(filePath: string): Promise<number> { return getServices().importMilestonesCsv(filePath); }
 
 export async function downloadAndSaveImage(mediaId: number, url: string): Promise<string> {
-  const g = globalThis as Record<string, unknown>;
-  if (g.mockDownloadedImagePath) {
-    return g.mockDownloadedImagePath as string;
+  const direct = (globalThis as unknown as Record<string, unknown>).mockDownloadedImagePath;
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct;
   }
-  return await invoke('download_and_save_image', { mediaId, url });
+  return getServices().downloadAndSaveImage(mediaId, url);
 }
 
-export async function getUsername(): Promise<string> {
-  return await invoke('get_username');
+// Legacy file-path-based desktop exports.
+export function importCsv(filePath: string): Promise<number> {
+  return desktopInvoke<number>('import_csv', { filePath });
 }
 
-export async function getSetting(key: string): Promise<string | null> {
-  return await invoke('get_setting', { key });
+export function exportCsv(filePath: string, startDate?: string, endDate?: string): Promise<number> {
+  return desktopInvoke<number>('export_csv', { filePath, startDate, endDate });
 }
 
-export async function setSetting(key: string, value: string): Promise<void> {
-  return await invoke('set_setting', { key, value });
+export function exportMediaCsv(filePath: string): Promise<number> {
+  return desktopInvoke<number>('export_media_csv', { filePath });
 }
 
-/**
- * Retrieves the version as defined in the manifest (or as dynamically set)
- */
-export async function getAppVersion(): Promise<string> {
-    const baseVersion = await getVersion();
-    // For in-development releases, we ignore the 0.x.x version and show the git hash
-    if (baseVersion.startsWith('0.')) {
-        return `0.0.0-dev.${__APP_GIT_HASH__}`;
-    }
-    return baseVersion;
+export function analyzeMediaCsv(filePath: string): Promise<MediaConflict[]> {
+  return desktopInvoke<MediaConflict[]>('analyze_media_csv', { filePath });
+}
+
+export function uploadCoverImage(mediaId: number, path: string): Promise<string> {
+  return desktopInvoke<string>('upload_cover_image', { mediaId, path });
+}
+
+export function readFileBytes(path: string): Promise<number[]> {
+  return desktopInvoke<number[]>('read_file_bytes', { path });
 }

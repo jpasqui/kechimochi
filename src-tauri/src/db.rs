@@ -19,6 +19,32 @@ pub fn get_data_dir(app_handle: &tauri::AppHandle) -> PathBuf {
     }
 }
 
+/// Standalone variant of get_data_dir for use in the web server binary,
+/// which has no Tauri AppHandle.
+/// Resolution order:
+///   1. KECHIMOCHI_DATA_DIR env var (same as the Tauri app, used for tests)
+///   2. Platform-specific default that matches Tauri's app_data_dir path
+pub fn get_data_dir_standalone() -> PathBuf {
+    if let Ok(dir) = std::env::var("KECHIMOCHI_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let appdata = std::env::var("APPDATA").expect("APPDATA env var not set");
+        PathBuf::from(appdata).join("kechimochi")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").expect("HOME env var not set");
+        PathBuf::from(home).join("Library/Application Support/kechimochi")
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let home = std::env::var("HOME").expect("HOME env var not set");
+        PathBuf::from(home).join(".local/share/kechimochi")
+    }
+}
+
 fn migrate_to_shared(conn: &Connection) -> Result<()> {
     // Check if `main.media` exists
     let count: i64 = conn.query_row(
@@ -531,6 +557,9 @@ pub fn save_cover_bytes(conn: &rusqlite::Connection, covers_dir: std::path::Path
 mod tests {
     use super::*;
     use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn setup_test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -551,6 +580,66 @@ mod tests {
             extra_data: "{}".to_string(),
             content_type: "Unknown".to_string(),
             tracking_status: "Untracked".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_get_data_dir_standalone_prefers_env_var() {
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        let original = std::env::var("KECHIMOCHI_DATA_DIR").ok();
+        let custom = std::env::temp_dir().join(format!("kechimochi_data_dir_env_{}", std::process::id()));
+
+        unsafe {
+            std::env::set_var("KECHIMOCHI_DATA_DIR", &custom);
+        }
+
+        let resolved = get_data_dir_standalone();
+        assert_eq!(resolved, custom);
+
+        match original {
+            Some(value) => unsafe {
+                std::env::set_var("KECHIMOCHI_DATA_DIR", value);
+            },
+            None => unsafe {
+                std::env::remove_var("KECHIMOCHI_DATA_DIR");
+            },
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_get_data_dir_standalone_windows_default_from_appdata() {
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        let original_data_dir = std::env::var("KECHIMOCHI_DATA_DIR").ok();
+        let original_appdata = std::env::var("APPDATA").ok();
+        let fake_appdata = std::env::temp_dir().join(format!("kechimochi_appdata_{}", std::process::id()));
+
+        unsafe {
+            std::env::remove_var("KECHIMOCHI_DATA_DIR");
+            std::env::set_var("APPDATA", &fake_appdata);
+        }
+
+        let resolved = get_data_dir_standalone();
+        assert_eq!(resolved, fake_appdata.join("kechimochi"));
+
+        match original_data_dir {
+            Some(value) => unsafe {
+                std::env::set_var("KECHIMOCHI_DATA_DIR", value);
+            },
+            None => unsafe {
+                std::env::remove_var("KECHIMOCHI_DATA_DIR");
+            },
+        }
+
+        match original_appdata {
+            Some(value) => unsafe {
+                std::env::set_var("APPDATA", value);
+            },
+            None => unsafe {
+                std::env::remove_var("APPDATA");
+            },
         }
     }
 

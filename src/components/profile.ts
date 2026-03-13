@@ -1,18 +1,17 @@
+import { Logger } from '../core/logger';
 import { Component } from '../core/component';
 import { html } from '../core/html';
 import {
-    getAllMedia, getLogsForMedia, importCsv, exportCsv, deleteProfile,
-    clearActivities, wipeEverything, exportMediaCsv, analyzeMediaCsv,
+    getAllMedia, getLogsForMedia, deleteProfile,
+    clearActivities, wipeEverything,
     applyMediaImport, switchProfile, listProfiles, getSetting, setSetting,
-    getAppVersion, importMilestonesCsv, exportMilestonesCsv,
-    Media, ActivitySummary
+    getAppVersion, importMilestonesCsv, exportMilestonesCsv
 } from '../api';
 import {
     customPrompt, showExportCsvModal, customAlert, customConfirm,
     showMediaCsvConflictModal, initialProfilePrompt
 } from '../modals';
-import { open, save } from '../utils/dialogs';
-import { Logger } from '../core/logger';
+import { getServices } from '../services';
 import { STORAGE_KEYS, SETTING_KEYS, DEFAULTS } from '../constants';
 
 interface ProfileState {
@@ -32,6 +31,7 @@ interface ProfileState {
 }
 
 export class ProfileView extends Component<ProfileState> {
+    private isRefreshing = false;
 
     constructor(container: HTMLElement) {
         super(container, {
@@ -50,6 +50,7 @@ export class ProfileView extends Component<ProfileState> {
             isInitialized: false
         });
     }
+
     async loadData() {
         const theme = await getSetting(SETTING_KEYS.THEME) || DEFAULTS.THEME;
         const novelSpeed = await getSetting(SETTING_KEYS.STATS_NOVEL_SPEED) || '0';
@@ -80,25 +81,14 @@ export class ProfileView extends Component<ProfileState> {
         });
     }
 
-    public setState(newState: Partial<ProfileState>) {
-        this.state = { ...this.state, ...newState };
-        this.render();
-    }
-
-    protected onMount() {
-        this.loadData().catch(e => Logger.error("Failed to load profile data", e));
-    }
-
     render() {
-        if (!this.state.isInitialized) {
-            this.clear();
-            this.container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">Loading...</div>';
-            return;
-        }
-
         const localStorageProfile = localStorage.getItem(STORAGE_KEYS.CURRENT_PROFILE) || DEFAULTS.PROFILE;
-        if (this.state.currentProfile !== localStorageProfile) {
-            this.loadData().catch(e => Logger.error("Failed to reload profile data", e));
+        const needsLoad = !this.state.isInitialized || this.state.currentProfile !== localStorageProfile;
+        if (!this.isRefreshing && needsLoad) {
+            this.isRefreshing = true;
+            this.loadData()
+                .catch(e => Logger.error('Failed to load profile data', e))
+                .finally(() => { this.isRefreshing = false; });
             return;
         }
 
@@ -256,175 +246,140 @@ export class ProfileView extends Component<ProfileState> {
     private setupListeners(root: HTMLElement) {
         const { currentProfile } = this.state;
 
-        root.querySelector('#profile-select-theme')?.addEventListener('change', (e) => {
+        root.querySelector('#profile-select-theme')?.addEventListener('change', async (e) => {
             const theme = (e.target as HTMLSelectElement).value;
-            (async () => {
-                await setSetting(SETTING_KEYS.THEME, theme);
-                document.body.dataset.theme = theme;
-                localStorage.setItem(STORAGE_KEYS.THEME_CACHE, theme);
-                this.setState({ theme });
-            })().catch(err => Logger.error("Failed to set theme", err));
+            await setSetting(SETTING_KEYS.THEME, theme);
+            document.body.dataset.theme = theme;
+            localStorage.setItem(STORAGE_KEYS.THEME_CACHE, theme);
+            this.setState({ theme });
         });
 
-        root.querySelector('#profile-btn-import-csv')?.addEventListener('click', () => {
-            (async () => {
-                const selected = await open({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
-                if (selected && typeof selected === 'string') {
-                    try {
-                        const count = await importCsv(selected);
-                        await customAlert("Success", `Successfully imported ${count} activity logs!`);
-                    } catch (e) {
-                        await customAlert("Error", `Import failed: ${e}`);
-                    }
-                }
-            })().catch(err => Logger.error("Failed to import CSV", err));
+        root.querySelector('#profile-btn-import-csv')?.addEventListener('click', async () => {
+            try {
+                const count = await getServices().pickAndImportActivities();
+                if (count !== null) await customAlert("Success", `Successfully imported ${count} activity logs!`);
+            } catch (e) {
+                await customAlert("Error", `Import failed: ${e}`);
+            }
         });
 
-        root.querySelector('#profile-btn-export-csv')?.addEventListener('click', () => {
-            (async () => {
-                const modeData = await showExportCsvModal();
-                if (!modeData) return;
-                const savePath = await save({ filters: [{ name: 'CSV', extensions: ['csv'] }], defaultPath: `kechimochi_${currentProfile}_activities.csv` });
-                if (savePath) {
-                    try {
-                        const count = modeData.mode === 'range' ? await exportCsv(savePath, modeData.start, modeData.end) : await exportCsv(savePath);
-                        await customAlert("Success", `Successfully exported ${count} activity logs!`);
-                    } catch (e) {
-                        await customAlert("Error", `Export failed: ${e}`);
-                    }
+        root.querySelector('#profile-btn-export-csv')?.addEventListener('click', async () => {
+            const modeData = await showExportCsvModal();
+            if (!modeData) return;
+            try {
+                let count: number | null;
+                if (modeData.mode === 'range') {
+                    count = await getServices().exportActivities(modeData.start, modeData.end);
+                } else {
+                    count = await getServices().exportActivities();
                 }
-            })().catch(err => Logger.error("Failed to export CSV", err));
+                if (count !== null) await customAlert("Success", `Successfully exported ${count} activity logs!`);
+            } catch (e) {
+                await customAlert("Error", `Export failed: ${e}`);
+            }
         });
 
-        root.querySelector('#profile-btn-import-media')?.addEventListener('click', () => {
-            (async () => {
-                const selected = await open({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
-                if (selected && typeof selected === 'string') {
-                    try {
-                        const conflicts = await analyzeMediaCsv(selected);
-                        if (!conflicts || conflicts.length === 0) {
-                            await customAlert("Info", "No valid media rows found in the CSV.");
-                            return;
-                        }
-                        const resolvedRecords = await showMediaCsvConflictModal(conflicts);
-                        if (!resolvedRecords || resolvedRecords.length === 0) return;
-                        const count = await applyMediaImport(resolvedRecords);
-                        await customAlert("Success", `Successfully imported ${count} media library entries!`);
-                    } catch (e) {
-                        await customAlert("Error", `Import failed: ${e}`);
-                    }
+        root.querySelector('#profile-btn-import-media')?.addEventListener('click', async () => {
+            try {
+                const conflicts = await getServices().analyzeMediaCsvFromPick();
+                if (!conflicts) return;
+                if (conflicts.length === 0) {
+                    await customAlert("Info", "No valid media rows found in the CSV.");
+                    return;
                 }
-            })().catch(err => Logger.error("Failed to import media", err));
+                const resolvedRecords = await showMediaCsvConflictModal(conflicts);
+                if (!resolvedRecords || resolvedRecords.length === 0) return;
+                const count = await applyMediaImport(resolvedRecords);
+                await customAlert("Success", `Successfully imported ${count} media library entries!`);
+            } catch (e) {
+                await customAlert("Error", `Import failed: ${e}`);
+            }
         });
 
-        root.querySelector('#profile-btn-export-media')?.addEventListener('click', () => {
-            (async () => {
-                const savePath = await save({ filters: [{ name: 'CSV', extensions: ['csv'] }], defaultPath: "kechimochi_media_library.csv" });
-                if (savePath) {
-                    try {
-                        const count = await exportMediaCsv(savePath);
-                        await customAlert("Success", `Successfully exported ${count} media library entries!`);
-                    } catch (e) {
-                        await customAlert("Error", `Export failed: ${e}`);
-                    }
-                }
-            })().catch(err => Logger.error("Failed to export media", err));
+        root.querySelector('#profile-btn-export-media')?.addEventListener('click', async () => {
+            try {
+                const count = await getServices().exportMediaLibrary(currentProfile);
+                if (count !== null) await customAlert("Success", `Successfully exported ${count} media library entries!`);
+            } catch (e) {
+                await customAlert("Error", `Export failed: ${e}`);
+            }
         });
 
         // Listeners for milestones (using delegation for robustness)
-        root.addEventListener('click', (e) => {
+        root.addEventListener('click', async (e) => {
             const target = (e.target as HTMLElement).closest('button');
             if (!target) return;
             
             if (target.id === 'profile-btn-import-milestones') {
-                (async () => {
-                    const selected = await open({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
-                    if (selected && typeof selected === 'string') {
-                        try {
-                            const count = await importMilestonesCsv(selected);
-                            await customAlert("Success", `Successfully imported ${count} milestones!`);
-                        } catch (e) {
-                            await customAlert("Error", `Import failed: ${e}`);
-                        }
-                    }
-                })().catch(err => Logger.error("Failed to import milestones", err));
+                try {
+                    const count = await importMilestonesCsv('');
+                    await customAlert("Success", `Successfully imported ${count} milestones!`);
+                } catch (e) {
+                    await customAlert("Error", `Import failed: ${e}`);
+                }
             }
             
             if (target.id === 'profile-btn-export-milestones') {
-                (async () => {
-                    const savePath = await save({ filters: [{ name: 'CSV', extensions: ['csv'] }], defaultPath: `kechimochi_${currentProfile}_milestones.csv` });
-                    if (savePath) {
-                        try {
-                            const count = await exportMilestonesCsv(savePath);
-                            await customAlert("Success", `Successfully exported ${count} milestones!`);
-                        } catch (e) {
-                            await customAlert("Error", `Export failed: ${e}`);
-                        }
-                    }
-                })().catch(err => Logger.error("Failed to export milestones", err));
+                try {
+                    const count = await exportMilestonesCsv('');
+                    await customAlert("Success", `Successfully exported ${count} milestones!`);
+                } catch (e) {
+                    await customAlert("Error", `Export failed: ${e}`);
+                }
             }
         });
 
-        root.querySelector('#profile-btn-clear-activities')?.addEventListener('click', () => {
-            (async () => {
-                if (await customConfirm("Clear Activities", `Are you sure you want to delete all activity logs for '${currentProfile}'?`, "btn-danger", "Clear")) {
-                    await clearActivities();
-                    await customAlert("Success", "All activity logs removed for the current profile.");
-                }
-            })().catch(err => Logger.error("Failed to clear activities", err));
+        root.querySelector('#profile-btn-clear-activities')?.addEventListener('click', async () => {
+            if (await customConfirm("Clear Activities", `Are you sure you want to delete all activity logs for '${currentProfile}'?`, "btn-danger", "Clear")) {
+                await clearActivities();
+                await customAlert("Success", "All activity logs removed for the current profile.");
+            }
         });
 
-        root.querySelector('#profile-btn-delete-profile')?.addEventListener('click', () => {
-            (async () => {
-                const profiles = await listProfiles();
-                if (profiles.length <= 1) {
-                    await customAlert("Error", "Cannot delete the current profile because it is the only remaining user.");
-                    return;
-                }
-                const name = await customPrompt(`Type '${currentProfile}' to confirm profile deletion:`);
-                if (name === currentProfile) {
-                    await deleteProfile(currentProfile);
-                    const updatedProfiles = await listProfiles();
-                    const nextProfile = updatedProfiles.length > 0 ? updatedProfiles[0] : DEFAULTS.PROFILE;
-                    localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, nextProfile);
-                    await switchProfile(nextProfile);
-                    globalThis.location.reload();
-                }
-            })().catch(err => Logger.error("Failed to delete profile", err));
+        root.querySelector('#profile-btn-delete-profile')?.addEventListener('click', async () => {
+            const profiles = await listProfiles();
+            if (profiles.length <= 1) {
+                await customAlert("Error", "Cannot delete the current profile because it is the only remaining user.");
+                return;
+            }
+            const name = await customPrompt(`Type '${currentProfile}' to confirm profile deletion:`);
+            if (name === currentProfile) {
+                await deleteProfile(currentProfile);
+                const updatedProfiles = await listProfiles();
+                const nextProfile = updatedProfiles.length > 0 ? updatedProfiles[0] : DEFAULTS.PROFILE;
+                localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, nextProfile);
+                await switchProfile(nextProfile);
+                globalThis.location.reload();
+            }
         });
 
-        root.querySelector('#profile-btn-wipe-everything')?.addEventListener('click', () => {
-            (async () => {
-                if (await customPrompt(`DANGER! Type 'WIPE_EVERYTHING' to confirm a total factory reset:`) === 'WIPE_EVERYTHING') {
-                    await wipeEverything();
-                    localStorage.removeItem(STORAGE_KEYS.CURRENT_PROFILE);
-                    const initialName = await initialProfilePrompt("User");
-                    localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, initialName);
-                    await switchProfile(initialName);
-                    globalThis.location.reload();
-                }
-            })().catch(err => Logger.error("Failed to wipe everything", err));
+        root.querySelector('#profile-btn-wipe-everything')?.addEventListener('click', async () => {
+            if (await customPrompt(`DANGER! Type 'WIPE_EVERYTHING' to confirm a total factory reset:`) === 'WIPE_EVERYTHING') {
+                await wipeEverything();
+                localStorage.removeItem(STORAGE_KEYS.CURRENT_PROFILE);
+                const initialName = await initialProfilePrompt("User");
+                localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, initialName);
+                await switchProfile(initialName);
+                globalThis.location.reload();
+            }
         });
 
-        root.querySelector('#profile-btn-calculate-report')?.addEventListener('click', () => {
+        root.querySelector('#profile-btn-calculate-report')?.addEventListener('click', async () => {
             const btn = root.querySelector('#profile-btn-calculate-report') as HTMLButtonElement;
             const originalText = btn.innerText;
             btn.disabled = true;
             btn.innerText = "Calculating...";
-            (async () => {
-                try {
-                    await this.calculateReport();
-                    await this.loadData();
-                    this.render();
-                    await customAlert("Success", "Reading report card calculated successfully!");
-                } catch (error) {
-                    Logger.error("Failed to calculate report card:", error);
-                    await customAlert("Error", "Failed to calculate report card.");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerText = originalText;
-                }
-            })().catch(err => Logger.error("Unexpected error calculating report", err));
+            try {
+                await this.calculateReport();
+                await this.loadData();
+                this.render();
+                await customAlert("Success", "Reading report card calculated successfully!");
+            } catch {
+                await customAlert("Error", "Failed to calculate report card.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
         });
     }
 
@@ -440,20 +395,11 @@ export class ProfileView extends Component<ProfileState> {
             "Manga": { totalSpeed: 0, count: 0 },
             "Visual Novel": { totalSpeed: 0, count: 0 }
         };
-
-        await this.processMediaStats(mediaList, stats, cutoffStr);
-        await setSetting(SETTING_KEYS.STATS_REPORT_TIMESTAMP, cutoffDate.toISOString());
-        await this.updateSettingStats(stats);
-    }
-
-    private async processMediaStats(mediaList: Media[], stats: Record<string, { totalSpeed: number, count: number }>, cutoffStr: string) {
         for (const media of mediaList) {
-            if (media.tracking_status !== 'Complete') continue;
-            const contentType = media.content_type || "";
-            if (!stats[contentType]) continue;
+            if (media.tracking_status !== 'Complete' || !stats[media.content_type ?? ""]) continue;
 
-            const extraData = this.parseExtraData(media.extra_data);
-            if (!extraData) continue;
+            let extraData: Record<string, string>;
+            try { extraData = JSON.parse(media.extra_data || "{}"); } catch { continue; }
 
             const charCount = Number.parseInt((extraData["Character count"] || "").replaceAll(',', ''), 10);
             if (Number.isNaN(charCount)) continue;
@@ -461,29 +407,24 @@ export class ProfileView extends Component<ProfileState> {
             const logs = await getLogsForMedia(media.id!);
             if (logs.length === 0 || logs[0].date < cutoffStr) continue;
 
-            const totalMinutes = logs.reduce((acc: number, log: ActivitySummary) => acc + log.duration_minutes, 0);
+            const totalMinutes = logs.reduce((acc, log) => acc + log.duration_minutes, 0);
             if (totalMinutes > 0) {
-                stats[contentType].totalSpeed += charCount / (totalMinutes / 60);
-                stats[contentType].count += 1;
+                stats[media.content_type ?? ""].totalSpeed += charCount / (totalMinutes / 60);
+                stats[media.content_type ?? ""].count += 1;
             }
         }
+
+        await this.saveReportStats(stats, cutoffDate);
     }
 
-    private parseExtraData(data: string | undefined): Record<string, string> | null {
-        try {
-            return JSON.parse(data || "{}");
-        } catch {
-            return null;
-        }
-    }
-
-    private async updateSettingStats(stats: Record<string, { totalSpeed: number, count: number }>) {
+    private async saveReportStats(stats: Record<string, { totalSpeed: number, count: number }>, cutoffDate: Date): Promise<void> {
+        await setSetting(SETTING_KEYS.STATS_REPORT_TIMESTAMP, cutoffDate.toISOString());
+        const prefixMap: Record<string, string> = { "Novel": "novel", "Manga": "manga", "Visual Novel": "vn" };
         for (const key of ["Novel", "Manga", "Visual Novel"]) {
             const s = stats[key];
             const avgSpeed = s.count > 0 ? Math.round(s.totalSpeed / s.count) : 0;
-            const prefix = key === "Visual Novel" ? "vn" : key.toLowerCase();
-            await setSetting(`stats_${prefix}_speed`, avgSpeed.toString());
-            await setSetting(`stats_${prefix}_count`, s.count.toString());
+            await setSetting(`stats_${prefixMap[key]}_speed`, avgSpeed.toString());
+            await setSetting(`stats_${prefixMap[key]}_count`, s.count.toString());
         }
     }
 }

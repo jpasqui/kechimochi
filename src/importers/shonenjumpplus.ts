@@ -1,5 +1,6 @@
 import { MetadataImporter, ScrapedMetadata } from './index';
-import { invoke } from '@tauri-apps/api/core';
+import { fetchExternalJson } from '../platform';
+import { Logger } from '../core/logger';
 
 export class ShonenjumpplusImporter implements MetadataImporter {
     name = "Shonen Jump Plus";
@@ -10,7 +11,7 @@ export class ShonenjumpplusImporter implements MetadataImporter {
     }
 
     async fetch(url: string, _targetVolume?: number): Promise<ScrapedMetadata> {
-        const html = await invoke<string>('fetch_external_json', { url, method: "GET" });
+        const html = await fetchExternalJson(url, "GET");
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
 
@@ -44,7 +45,7 @@ export class ShonenjumpplusImporter implements MetadataImporter {
 
     private async fetchAndParseRss(rssUrl: string, parser: DOMParser) {
         try {
-            const rssXml = await invoke<string>('fetch_external_json', { url: rssUrl, method: "GET" });
+            const rssXml = await fetchExternalJson(rssUrl, "GET");
             const rssDoc = parser.parseFromString(rssXml, 'text/xml');
             
             const description = rssDoc.querySelector('channel > description')?.textContent?.trim() || "";
@@ -53,8 +54,7 @@ export class ShonenjumpplusImporter implements MetadataImporter {
 
             return { description, author, pubDate };
         } catch (e) {
-            // eslint-disable-next-line no-console
-            console.error("Failed to fetch or parse RSS feed:", e);
+            Logger.error("Failed to fetch or parse RSS feed:", e);
             return null;
         }
     }

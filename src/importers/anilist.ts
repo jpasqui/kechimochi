@@ -1,5 +1,5 @@
 import { MetadataImporter, ScrapedMetadata } from './index';
-import { invoke } from '@tauri-apps/api/core';
+import { fetchExternalJson } from '../platform';
 
 interface AnilistMedia {
     title?: { romaji?: string; english?: string };
@@ -57,12 +57,12 @@ export class AnilistImporter implements MetadataImporter {
           }
         }`;
 
-        const responseText: string = await invoke('fetch_external_json', {
-            url: "https://graphql.anilist.co",
-            method: "POST",
-            body: JSON.stringify({ query, variables: { id } }),
-            headers: { "Content-Type": "application/json", "Accept": "application/json" }
-        });
+        const responseText: string = await fetchExternalJson(
+            "https://graphql.anilist.co",
+            "POST",
+            JSON.stringify({ query, variables: { id } }),
+            { "Content-Type": "application/json", "Accept": "application/json" },
+        );
 
         const json = JSON.parse(responseText) as { data?: { Media?: AnilistMedia }, errors?: { message: string }[] };
         if (json.errors) throw new Error("Anilist API returned an error: " + json.errors[0]?.message);

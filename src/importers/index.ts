@@ -34,11 +34,15 @@ export const importers: MetadataImporter[] = [
     new JitenImporter()
 ];
 
+function getMockMetadata(): ScrapedMetadata | null {
+    const direct = (globalThis as unknown as Record<string, unknown>).mockMetadata;
+    if (direct) return direct as ScrapedMetadata;
+    return null;
+}
+
 export async function fetchMetadataForUrl(url: string, contentType: string, targetVolume?: number): Promise<ScrapedMetadata | null> {
-    const g = globalThis as unknown as Record<string, unknown>;
-    if (g.mockMetadata) {
-        return g.mockMetadata as ScrapedMetadata;
-    }
+    const mock = getMockMetadata();
+    if (mock) return mock;
     const importer = importers.find(i => i.matchUrl(url, contentType));
     if (!importer) {
         throw new Error("No importer available for this URL and/or Content Type.");

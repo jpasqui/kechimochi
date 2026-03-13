@@ -1,5 +1,5 @@
 import { ScrapedMetadata, MetadataImporter } from './index';
-import { invoke } from '@tauri-apps/api/core';
+import { fetchExternalJson } from '../platform';
 
 interface VndbVn {
     id: string;
@@ -61,26 +61,26 @@ export class VndbImporter implements MetadataImporter {
     }
 
     private async fetchVnDetails(vnId: string): Promise<VndbVn> {
-        const resStr = await invoke<string>('fetch_external_json', {
-            url: "https://api.vndb.org/kana/vn",
-            method: "POST",
-            body: JSON.stringify({ filters: ["id", "=", vnId], fields: "id, description, image.url, platforms" })
-        });
+        const resStr = await fetchExternalJson(
+            "https://api.vndb.org/kana/vn",
+            "POST",
+            JSON.stringify({ filters: ["id", "=", vnId], fields: "id, description, image.url, platforms" })
+        );
         const data = JSON.parse(resStr) as { results: VndbVn[] };
         if (!data.results?.[0]) throw new Error("VN not found on VNDB.");
         return data.results[0];
     }
 
     private async fetchEarliestRelease(vnId: string) {
-        const resStr = await invoke<string>('fetch_external_json', {
-            url: "https://api.vndb.org/kana/release",
-            method: "POST",
-            body: JSON.stringify({
+        const resStr = await fetchExternalJson(
+            "https://api.vndb.org/kana/release",
+            "POST",
+            JSON.stringify({
                 filters: ["vn", "=", ["id", "=", vnId]],
                 fields: "id, title, released, producers.developer, producers.publisher, producers.name",
                 sort: "released", reverse: false
             })
-        });
+        );
 
         const data = JSON.parse(resStr) as { results: VndbRelease[] };
         const firstRel: VndbRelease | undefined = data.results?.[0];

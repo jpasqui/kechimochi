@@ -1,5 +1,6 @@
 import { MetadataImporter, ScrapedMetadata } from './index';
-import { invoke } from '@tauri-apps/api/core';
+import { fetchExternalJson } from '../platform';
+import { Logger } from '../core/logger';
 
 export class BookwalkerImporter implements MetadataImporter {
     name = "Bookwalker";
@@ -11,7 +12,7 @@ export class BookwalkerImporter implements MetadataImporter {
     async fetch(url: string, targetVolume?: number): Promise<ScrapedMetadata> {
         let currentUrl = url;
         const parser = new DOMParser();
-        const html = await invoke<string>('fetch_external_json', { url: currentUrl, method: "GET" });
+        const html = await fetchExternalJson(currentUrl, "GET");
         let doc = parser.parseFromString(html, 'text/html');
 
         if (targetVolume !== undefined) {
@@ -41,24 +42,22 @@ export class BookwalkerImporter implements MetadataImporter {
         }
 
         if (!seriesUrl) {
-            // eslint-disable-next-line no-console
-            console.warn(`Could not find a Series List link. Using original URL.`);
+            Logger.warn(`Could not find a Series List link. Using original URL.`);
             return null;
         }
 
-        const seriesHtml = await invoke<string>('fetch_external_json', { url: seriesUrl, method: "GET" });
+        const seriesHtml = await fetchExternalJson(seriesUrl, "GET");
         const seriesDoc = parser.parseFromString(seriesHtml, 'text/html');
         const foundUrl = this.findVolumeUrl(seriesDoc, targetVolume);
 
         if (foundUrl) {
             let fullUrl = foundUrl;
             if (!fullUrl.startsWith("http")) fullUrl = "https://bookwalker.jp" + fullUrl;
-            const html = await invoke<string>('fetch_external_json', { url: fullUrl, method: "GET" });
+            const html = await fetchExternalJson(fullUrl, "GET");
             return { url: fullUrl, doc: parser.parseFromString(html, 'text/html') };
         }
 
-        // eslint-disable-next-line no-console
-        console.warn(`Could not find Volume ${targetVolume} on series list. Using original URL.`);
+        Logger.warn(`Could not find Volume ${targetVolume} on series list. Using original URL.`);
         return null;
     }
 

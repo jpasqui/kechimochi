@@ -26,7 +26,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
         this.clear();
         
         const chartsLayout = html`
-            <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 2rem;">
+            <div id="activity-charts-grid" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 2rem;">
                 <div class="card" style="display: flex; flex-direction: column; min-width: 0;">
                     <h3 style="text-align: center; margin-bottom: 1rem;">Activity Breakdown</h3>
                     <div class="chart-container-wrapper" style="flex: 1; min-height: 0;">
@@ -34,8 +34,8 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                     </div>
                 </div>
                 <div class="card" style="display: flex; flex-direction: column; min-width: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div class="activity-charts-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div class="activity-charts-title-controls" style="display: flex; align-items: center; gap: 0.5rem;">
                             <button class="btn btn-ghost" style="padding: 0.1rem 0.4rem;" id="btn-chart-prev">&lt;</button>
                             <h3 style="margin: 0;">Activity visualization</h3>
                             <button class="btn btn-ghost" style="padding: 0.1rem 0.4rem;" id="btn-chart-next">&gt;</button>

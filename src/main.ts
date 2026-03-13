@@ -9,7 +9,7 @@ import {
     customPrompt, customConfirm, customAlert,
     initialProfilePrompt, showLogActivityModal
 } from './modals';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { initServices, getServices } from './services';
 import { Logger } from './core/logger';
 import { STORAGE_KEYS, SETTING_KEYS, VIEW_NAMES, EVENTS, DEFAULTS } from './constants';
 
@@ -44,9 +44,6 @@ if (mockDateStr) {
         }
     };
 }
-
-const appWindow = getCurrentWindow();
-
 type ViewType = typeof VIEW_NAMES[keyof typeof VIEW_NAMES];
 
 class App {
@@ -121,9 +118,10 @@ class App {
     }
 
     private setupWindowControls() {
-        document.getElementById('win-min')?.addEventListener('click', () => appWindow.minimize());
-        document.getElementById('win-max')?.addEventListener('click', () => appWindow.toggleMaximize());
-        document.getElementById('win-close')?.addEventListener('click', () => appWindow.close());
+        if (!getServices().isDesktop()) return;
+        document.getElementById('win-min')?.addEventListener('click', () => getServices().minimizeWindow());
+        document.getElementById('win-max')?.addEventListener('click', () => getServices().maximizeWindow());
+        document.getElementById('win-close')?.addEventListener('click', () => getServices().closeWindow());
     }
 
     private setupNavigation() {
@@ -223,7 +221,14 @@ class App {
             localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, this.currentProfile);
         }
 
-        this.selectProfileEl.innerHTML = profiles.map((p: string) => `<option value="${p}">${p}</option>`).join('');
+        this.selectProfileEl.replaceChildren(
+            ...profiles.map(profile => {
+                const option = document.createElement('option');
+                option.value = profile;
+                option.textContent = profile;
+                return option;
+            })
+        );
         this.selectProfileEl.value = this.currentProfile;
     }
 
@@ -267,7 +272,10 @@ class App {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    App.start().catch(e => {
+    (async () => {
+        await initServices();
+        await App.start();
+    })().catch(e => {
         Logger.error('Failed to start application:', e);
     });
 });
