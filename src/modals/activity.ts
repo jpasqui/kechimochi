@@ -38,7 +38,10 @@ export async function showExportCsvModal(): Promise<{mode: 'all' | 'range', star
         
         overlay.querySelector('#export-cancel')!.addEventListener('click', () => { cleanup(); resolve(null); });
         overlay.querySelector('#export-confirm')!.addEventListener('click', () => { 
-            if (modeRange.checked) resolve({ mode: 'range', start: selectedStart <= selectedEnd ? selectedStart : selectedEnd, end: selectedStart <= selectedEnd ? selectedEnd : selectedStart });
+            if (modeRange.checked) {
+                const [start, end] = [selectedStart, selectedEnd].sort((a, b) => a.localeCompare(b));
+                resolve({ mode: 'range', start, end });
+            }
             else resolve({ mode: 'all' });
             cleanup();
         });
