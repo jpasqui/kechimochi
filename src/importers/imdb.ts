@@ -70,7 +70,7 @@ export class ImdbImporter implements MetadataImporter {
         }
         if (movieData.genre) {
             const genres = Array.isArray(movieData.genre) ? movieData.genre : [movieData.genre];
-            extraData["Genres"] = genres.join(", ");
+            extraData["Genres"] = genres.map(g => (typeof g === 'string' || typeof g === 'number') ? String(g) : JSON.stringify(g)).join(", ");
         }
         if (movieData.duration) {
             extraData["Total Runtime"] = this.parseISO8601Duration(movieData.duration as string);
@@ -79,8 +79,11 @@ export class ImdbImporter implements MetadataImporter {
             const yearMatch = /^\d{4}/.exec(movieData.datePublished as string);
             if (yearMatch) extraData["Release Year"] = yearMatch[0];
         }
-        if ((movieData.aggregateRating as Record<string, unknown>)?.ratingValue) {
-            extraData["IMDb Rating"] = (movieData.aggregateRating as Record<string, unknown>).ratingValue!.toString();
+        const rating = (movieData.aggregateRating as Record<string, unknown>)?.ratingValue;
+        if (typeof rating === "string" || typeof rating === "number") {
+            extraData["IMDb Rating"] = String(rating);
+        } else if (rating !== undefined && rating !== null) {
+            extraData["IMDb Rating"] = JSON.stringify(rating);
         }
     }
 

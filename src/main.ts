@@ -10,22 +10,22 @@ import {
     initialProfilePrompt, showLogActivityModal
 } from './modals';
 import { initServices, getServices } from './services';
+import { Logger } from './core/logger';
+import { STORAGE_KEYS, SETTING_KEYS, VIEW_NAMES, EVENTS, DEFAULTS } from './constants';
 
 // Support global date mocking for E2E tests
 let mockDateStr: string | null = null;
 try {
-    mockDateStr = sessionStorage.getItem('kechimochi_mock_date');
-    if (localStorage.getItem('kechimochi_mock_date')) {
-        localStorage.removeItem('kechimochi_mock_date');
+    mockDateStr = sessionStorage.getItem(STORAGE_KEYS.MOCK_DATE);
+    if (localStorage.getItem(STORAGE_KEYS.MOCK_DATE)) {
+        localStorage.removeItem(STORAGE_KEYS.MOCK_DATE);
     }
 } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('[kechimochi] Failed to access storage for mock date:', e);
+    Logger.warn('[kechimochi] Failed to access storage for mock date:', e);
 }
 
 if (mockDateStr) {
-    // eslint-disable-next-line no-console
-    console.log(`[kechimochi] Mocking system date to: ${mockDateStr}`);
+    Logger.info(`[kechimochi] Mocking system date to: ${mockDateStr}`);
     const originalDate = Date;
     const frozenTimestamp = new Date(mockDateStr + "T12:00:00Z").getTime();
 
@@ -44,11 +44,11 @@ if (mockDateStr) {
         }
     };
 }
-type ViewType = 'dashboard' | 'media' | 'profile';
+type ViewType = typeof VIEW_NAMES[keyof typeof VIEW_NAMES];
 
 class App {
-    private currentView: ViewType = 'dashboard';
-    private currentProfile: string = localStorage.getItem('kechimochi_profile') || '';
+    private currentView: ViewType = VIEW_NAMES.DASHBOARD;
+    private currentProfile: string = localStorage.getItem(STORAGE_KEYS.CURRENT_PROFILE) || DEFAULTS.PROFILE;
 
     private readonly dashboard: Dashboard;
     private readonly mediaView: MediaView;
@@ -136,9 +136,10 @@ class App {
     private setupProfileControls() {
         this.selectProfileEl.addEventListener('change', async () => {
             this.currentProfile = this.selectProfileEl.value;
-            localStorage.setItem('kechimochi_profile', this.currentProfile);
+            localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, this.currentProfile);
             await switchProfile(this.currentProfile);
             await this.loadTheme();
+            localStorage.setItem(STORAGE_KEYS.THEME_CACHE, document.body.dataset.theme || DEFAULTS.THEME);
             this.resetViews();
             this.renderCurrentView();
         });
@@ -147,7 +148,7 @@ class App {
             const newProfile = await customPrompt("Enter new user profile name:");
             if (newProfile && newProfile.trim() !== '') {
                 this.currentProfile = newProfile.trim();
-                localStorage.setItem('kechimochi_profile', this.currentProfile);
+                localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, this.currentProfile);
                 await switchProfile(this.currentProfile);
                 await this.loadTheme();
                 await this.ensureProfilesList();
@@ -166,8 +167,8 @@ class App {
             if (yes) {
                 await deleteProfile(this.currentProfile);
                 const updatedProfiles = await listProfiles();
-                this.currentProfile = updatedProfiles.length > 0 ? updatedProfiles[0] : 'default';
-                localStorage.setItem('kechimochi_profile', this.currentProfile);
+                this.currentProfile = updatedProfiles.length > 0 ? updatedProfiles[0] : DEFAULTS.PROFILE;
+                localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, this.currentProfile);
                 await switchProfile(this.currentProfile);
                 await this.loadTheme();
                 await this.ensureProfilesList();
@@ -181,25 +182,25 @@ class App {
         document.getElementById('btn-add-activity')?.addEventListener('click', async () => {
             const success = await showLogActivityModal();
             if (success) {
-                if (this.currentView === 'dashboard') await this.dashboard.loadData();
-                else if (this.currentView === 'media') await this.mediaView.loadData();
+                if (this.currentView === VIEW_NAMES.DASHBOARD) await this.dashboard.loadData();
+                else if (this.currentView === VIEW_NAMES.MEDIA) await this.mediaView.loadData();
                 this.renderCurrentView();
             }
         });
     }
 
     private setupEventListeners() {
-        globalThis.addEventListener('app-navigate', (e: Event) => {
+        globalThis.addEventListener(EVENTS.APP_NAVIGATE, (e: Event) => {
             const detail = (e as CustomEvent).detail;
             if (detail?.view) {
-                if (detail.view === 'media' && detail.focusMediaId !== undefined) {
-                    this.switchView('media');
+                if (detail.view === VIEW_NAMES.MEDIA && detail.focusMediaId !== undefined) {
+                    this.switchView(VIEW_NAMES.MEDIA);
                     this.mediaView.jumpToMedia(detail.focusMediaId);
                 }
             }
         });
 
-        globalThis.addEventListener('profile-updated', () => {
+        globalThis.addEventListener(EVENTS.PROFILE_UPDATED, () => {
             this.loadTheme();
             this.ensureProfilesList();
         });
@@ -212,12 +213,12 @@ class App {
             const osUsername = await getUsername();
             const initialName = await initialProfilePrompt(osUsername);
             this.currentProfile = initialName;
-            localStorage.setItem('kechimochi_profile', this.currentProfile);
+            localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, this.currentProfile);
             await switchProfile(this.currentProfile);
             profiles = await listProfiles();
         } else if (!profiles.includes(this.currentProfile)) {
             this.currentProfile = profiles[0];
-            localStorage.setItem('kechimochi_profile', this.currentProfile);
+            localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, this.currentProfile);
         }
 
         this.selectProfileEl.replaceChildren(
@@ -238,8 +239,9 @@ class App {
     }
 
     private async loadTheme() {
-        const theme = await getSetting('theme') || 'pastel-pink';
+        const theme = await getSetting(SETTING_KEYS.THEME) || DEFAULTS.THEME;
         document.body.dataset.theme = theme;
+        localStorage.setItem(STORAGE_KEYS.THEME_CACHE, theme);
     }
 
     private async switchView(view: ViewType) {
@@ -259,13 +261,13 @@ class App {
     }
 
     private renderCurrentView() {
-        this.dashboardContainer.style.display = this.currentView === 'dashboard' ? 'block' : 'none';
-        this.mediaContainer.style.display = this.currentView === 'media' ? 'block' : 'none';
-        this.profileContainer.style.display = this.currentView === 'profile' ? 'block' : 'none';
+        this.dashboardContainer.style.display = this.currentView === VIEW_NAMES.DASHBOARD ? 'block' : 'none';
+        this.mediaContainer.style.display = this.currentView === VIEW_NAMES.MEDIA ? 'block' : 'none';
+        this.profileContainer.style.display = this.currentView === VIEW_NAMES.PROFILE ? 'block' : 'none';
 
-        if (this.currentView === 'dashboard') this.dashboard.render();
-        else if (this.currentView === 'media') this.mediaView.render();
-        else if (this.currentView === 'profile') this.profileView.render();
+        if (this.currentView === VIEW_NAMES.DASHBOARD) this.dashboard.render();
+        else if (this.currentView === VIEW_NAMES.MEDIA) this.mediaView.render();
+        else if (this.currentView === VIEW_NAMES.PROFILE) this.profileView.render();
     }
 }
 
@@ -274,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await initServices();
         await App.start();
     })().catch(e => {
-        // eslint-disable-next-line no-console
-        console.error('Failed to start application:', e);
+        Logger.error('Failed to start application:', e);
     });
 });

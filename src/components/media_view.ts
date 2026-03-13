@@ -1,9 +1,10 @@
 import { Component } from '../core/component';
 import { html } from '../core/html';
 import { Media, ActivitySummary, getAllMedia, getLogsForMedia, getSetting, setSetting } from '../api';
-import { MediaGrid, MediaFilters } from './media/MediaGrid';
+import { MediaGrid } from './media/MediaGrid';
 import { MediaDetail } from './media/MediaDetail';
 import { Logger } from '../core/logger';
+import { SETTING_KEYS } from '../constants';
 
 interface MediaViewState {
     viewMode: 'grid' | 'detail';
@@ -110,7 +111,7 @@ export class MediaView extends Component<MediaViewState> {
         this.setState({ isLoading: true });
         try {
             if (!this.state.isInitialized) {
-                const hideArchivedStr = await getSetting('grid_hide_archived');
+                const hideArchivedStr = await getSetting(SETTING_KEYS.GRID_HIDE_ARCHIVED);
                 if (hideArchivedStr !== null) {
                     this.state.gridFilters.hideArchived = hideArchivedStr === 'true';
                 }
@@ -118,7 +119,7 @@ export class MediaView extends Component<MediaViewState> {
 
             const mediaList = await getAllMedia();
             const nextIndex = this.state.currentIndex;
-            const targetId = jumpToId !== undefined ? jumpToId : this.targetMediaId;
+            const targetId = jumpToId ?? this.targetMediaId;
             let finalNextIndex = nextIndex;
             let currentLogs: ActivitySummary[] = [];
 
@@ -130,7 +131,7 @@ export class MediaView extends Component<MediaViewState> {
                 this.targetMediaId = null;
             }
 
-            const viewMode = jumpToId !== undefined ? 'detail' : this.state.viewMode;
+            const viewMode = (jumpToId === undefined) ? this.state.viewMode : 'detail';
             if (viewMode === 'detail' && mediaList[finalNextIndex]) {
                 currentLogs = await getLogsForMedia(mediaList[finalNextIndex].id!);
             }
@@ -173,9 +174,7 @@ export class MediaView extends Component<MediaViewState> {
             return;
         }
 
-        if (this.activeSubComponent && this.activeSubComponent.destroy) {
-            this.activeSubComponent.destroy();
-        }
+        this.activeSubComponent?.destroy?.();
 
         if (this.state.viewMode === 'grid') {
             this.renderGrid(root);
@@ -199,9 +198,9 @@ export class MediaView extends Component<MediaViewState> {
             },
             (filters) => {
                 const oldHideArchived = this.state.gridFilters.hideArchived;
-                this.state.gridFilters = { ...this.state.gridFilters, ...filters as MediaFilters };
+                this.state.gridFilters = { ...this.state.gridFilters, ...filters };
                 if (filters.hideArchived !== undefined && oldHideArchived !== filters.hideArchived) {
-                    void setSetting('grid_hide_archived', filters.hideArchived.toString());
+                    void setSetting(SETTING_KEYS.GRID_HIDE_ARCHIVED, filters.hideArchived.toString());
                 }
             }
         );

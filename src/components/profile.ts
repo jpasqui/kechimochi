@@ -12,6 +12,7 @@ import {
     showMediaCsvConflictModal, initialProfilePrompt
 } from '../modals';
 import { getServices } from '../services';
+import { STORAGE_KEYS, SETTING_KEYS, DEFAULTS } from '../constants';
 
 interface ProfileState {
     currentProfile: string;
@@ -34,8 +35,8 @@ export class ProfileView extends Component<ProfileState> {
 
     constructor(container: HTMLElement) {
         super(container, {
-            currentProfile: localStorage.getItem('kechimochi_profile') || 'default',
-            theme: 'pastel-pink',
+            currentProfile: localStorage.getItem(STORAGE_KEYS.CURRENT_PROFILE) || DEFAULTS.PROFILE,
+            theme: localStorage.getItem(STORAGE_KEYS.THEME_CACHE) || DEFAULTS.THEME,
             report: {
                 novelSpeed: '0',
                 novelCount: '0',
@@ -51,17 +52,18 @@ export class ProfileView extends Component<ProfileState> {
     }
 
     async loadData() {
-        const theme = await getSetting('theme') || 'pastel-pink';
-        const novelSpeed = await getSetting('stats_novel_speed') || '0';
-        const novelCount = await getSetting('stats_novel_count') || '0';
-        const mangaSpeed = await getSetting('stats_manga_speed') || '0';
-        const mangaCount = await getSetting('stats_manga_count') || '0';
-        const vnSpeed = await getSetting('stats_vn_speed') || '0';
-        const vnCount = await getSetting('stats_vn_count') || '0';
-        const timestamp = await getSetting('stats_report_timestamp') || '';
+        const theme = await getSetting(SETTING_KEYS.THEME) || DEFAULTS.THEME;
+        const novelSpeed = await getSetting(SETTING_KEYS.STATS_NOVEL_SPEED) || '0';
+        const novelCount = await getSetting(SETTING_KEYS.STATS_NOVEL_COUNT) || '0';
+        const mangaSpeed = await getSetting(SETTING_KEYS.STATS_MANGA_SPEED) || '0';
+        const mangaCount = await getSetting(SETTING_KEYS.STATS_MANGA_COUNT) || '0';
+        const vnSpeed = await getSetting(SETTING_KEYS.STATS_VN_SPEED) || '0';
+        const vnCount = await getSetting(SETTING_KEYS.STATS_VN_COUNT) || '0';
+        const timestamp = await getSetting(SETTING_KEYS.STATS_REPORT_TIMESTAMP) || '';
         const appVersion = await getAppVersion();
 
-        const currentProfile = localStorage.getItem('kechimochi_profile') || 'default';
+        const currentProfile = localStorage.getItem(STORAGE_KEYS.CURRENT_PROFILE) || DEFAULTS.PROFILE;
+        localStorage.setItem(STORAGE_KEYS.THEME_CACHE, theme);
         this.setState({
             currentProfile,
             theme,
@@ -80,7 +82,7 @@ export class ProfileView extends Component<ProfileState> {
     }
 
     render() {
-        const localStorageProfile = localStorage.getItem('kechimochi_profile') || 'default';
+        const localStorageProfile = localStorage.getItem(STORAGE_KEYS.CURRENT_PROFILE) || DEFAULTS.PROFILE;
         const needsLoad = !this.state.isInitialized || this.state.currentProfile !== localStorageProfile;
         if (!this.isRefreshing && needsLoad) {
             this.isRefreshing = true;
@@ -246,8 +248,9 @@ export class ProfileView extends Component<ProfileState> {
 
         root.querySelector('#profile-select-theme')?.addEventListener('change', async (e) => {
             const theme = (e.target as HTMLSelectElement).value;
-            await setSetting('theme', theme);
+            await setSetting(SETTING_KEYS.THEME, theme);
             document.body.dataset.theme = theme;
+            localStorage.setItem(STORAGE_KEYS.THEME_CACHE, theme);
             this.setState({ theme });
         });
 
@@ -343,8 +346,8 @@ export class ProfileView extends Component<ProfileState> {
             if (name === currentProfile) {
                 await deleteProfile(currentProfile);
                 const updatedProfiles = await listProfiles();
-                const nextProfile = updatedProfiles.length > 0 ? updatedProfiles[0] : 'default';
-                localStorage.setItem('kechimochi_profile', nextProfile);
+                const nextProfile = updatedProfiles.length > 0 ? updatedProfiles[0] : DEFAULTS.PROFILE;
+                localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, nextProfile);
                 await switchProfile(nextProfile);
                 globalThis.location.reload();
             }
@@ -353,9 +356,9 @@ export class ProfileView extends Component<ProfileState> {
         root.querySelector('#profile-btn-wipe-everything')?.addEventListener('click', async () => {
             if (await customPrompt(`DANGER! Type 'WIPE_EVERYTHING' to confirm a total factory reset:`) === 'WIPE_EVERYTHING') {
                 await wipeEverything();
-                localStorage.removeItem('kechimochi_profile');
+                localStorage.removeItem(STORAGE_KEYS.CURRENT_PROFILE);
                 const initialName = await initialProfilePrompt("User");
-                localStorage.setItem('kechimochi_profile', initialName);
+                localStorage.setItem(STORAGE_KEYS.CURRENT_PROFILE, initialName);
                 await switchProfile(initialName);
                 globalThis.location.reload();
             }
@@ -392,7 +395,6 @@ export class ProfileView extends Component<ProfileState> {
             "Manga": { totalSpeed: 0, count: 0 },
             "Visual Novel": { totalSpeed: 0, count: 0 }
         };
-
         for (const media of mediaList) {
             if (media.tracking_status !== 'Complete' || !stats[media.content_type ?? ""]) continue;
 
@@ -416,7 +418,7 @@ export class ProfileView extends Component<ProfileState> {
     }
 
     private async saveReportStats(stats: Record<string, { totalSpeed: number, count: number }>, cutoffDate: Date): Promise<void> {
-        await setSetting('stats_report_timestamp', cutoffDate.toISOString());
+        await setSetting(SETTING_KEYS.STATS_REPORT_TIMESTAMP, cutoffDate.toISOString());
         const prefixMap: Record<string, string> = { "Novel": "novel", "Manga": "manga", "Visual Novel": "vn" };
         for (const key of ["Novel", "Manga", "Visual Novel"]) {
             const s = stats[key];
