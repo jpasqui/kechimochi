@@ -59,9 +59,9 @@ export class DesktopServices implements AppServices {
 
     async getAppVersion(): Promise<string> {
         const base = await getVersion();
-        const hash = __APP_GIT_HASH__ === undefined
-            ? ((globalThis as Record<string, unknown>).__APP_GIT_HASH__ as string) || 'dev'
-            : __APP_GIT_HASH__;
+        const hash = (__APP_GIT_HASH__ as string | undefined)
+            ?? ((globalThis as Record<string, unknown>).__APP_GIT_HASH__ as string)
+            ?? 'dev';
         return base.startsWith('0.') ? `0.0.0-dev.${hash}` : base;
     }
 
