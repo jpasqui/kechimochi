@@ -2,6 +2,7 @@ import { waitForAppReady } from '../helpers/setup.js';
 import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
 import { addMedia } from '../helpers/library.js';
 import { setDialogMockPath } from '../helpers/common.js';
+import { waitForMockDownloadedFile } from '../helpers/platform-ops.js';
 import { addMilestone, deleteMilestone, clearAllMilestones, getMilestoneListText } from '../helpers/media-detail.js';
 import { exportMilestones, importMilestones } from '../helpers/profile.js';
 import fs from 'node:fs';
@@ -89,6 +90,7 @@ describe('Milestone CUJ Test', () => {
         // Export
         await setDialogMockPath(tempExportPath);
         await exportMilestones();
+        await waitForMockDownloadedFile(tempExportPath);
         expect(fs.existsSync(tempExportPath)).toBe(true);
 
         // Clear state before import

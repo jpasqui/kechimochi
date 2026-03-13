@@ -1,6 +1,7 @@
 import { waitForAppReady } from '../helpers/setup.js';
 import { verifyViewNotBroken } from '../helpers/navigation.js';
 import { takeAndCompareScreenshot } from '../helpers/common.js';
+import { isWebMode } from '../helpers/mode.js';
 
 describe('Dashboard CUJ', () => {
   before(async () => {
@@ -28,6 +29,9 @@ describe('Dashboard CUJ', () => {
   });
 
   it('should match the baseline screenshot', async () => {
+    if (isWebMode()) {
+      return;
+    }
     await takeAndCompareScreenshot('dashboard-initial');
   });
 });

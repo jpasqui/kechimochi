@@ -4,16 +4,19 @@
  */
 
 import os from 'node:os';
+import net from 'node:net';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { prepareTestDir, cleanupTestDir } from './helpers/setup.js';
+import { getE2EMode, isWebMode } from './helpers/mode.js';
 
-interface TauriSessionCaps {
+interface SessionCaps {
     port?: number;
-    'tauri:options': {
+  browserName?: string;
+  'tauri:options'?: {
         envs?: Record<string, string>;
         [key: string]: unknown;
     };
@@ -29,11 +32,114 @@ if (process.env.TEST_RUN_ID) {
     console.log(`[e2e] Worker process using inherited TEST_RUN_ID: ${STABLE_RUN_ID}`);
 }
 
-let tauriDriver: ChildProcess;
-let tauriDriverExitCode: number | null | undefined;
+const E2E_MODE = getE2EMode();
+const WEB_MODE = isWebMode();
+
+let sessionDriver: ChildProcess | undefined;
+let sessionDriverExitCode: number | null | undefined;
 
 function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+interface SeedMedia {
+  title: string;
+  media_type: string;
+  content_type: string;
+  status?: string;
+  tracking_status?: string;
+}
+
+async function waitForPortOpen(port: number, timeout = 10000): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeout) {
+    const isOpen = await new Promise<boolean>((resolve) => {
+      const socket = net.createConnection({ host: '127.0.0.1', port });
+      socket.once('connect', () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.once('error', () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+
+    if (isOpen) {
+      return;
+    }
+
+    await delay(250);
+  }
+
+  throw new Error(`Timed out waiting for driver port ${port} to become available`);
+}
+
+async function seedWebTestData(): Promise<void> {
+  if (process.env.E2E_WEB_SEED === '0') {
+    return;
+  }
+
+  const apiBase = process.env.E2E_API_BASE_URL || 'http://127.0.0.1:3000/api';
+
+  const post = async <T>(path: string, body?: unknown): Promise<T> => {
+    const res = await fetch(`${apiBase}${path}`, {
+      method: 'POST',
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`Web seed request failed: POST ${path} -> ${res.status} ${await res.text()}`);
+    }
+    return res.json();
+  };
+
+  await post('/reset');
+  await post('/profiles/switch', { profile_name: 'TESTUSER' });
+
+  const mediaList: SeedMedia[] = [
+    { title: '呪術廻戦', media_type: 'Reading', content_type: 'Manga', status: 'Active', tracking_status: 'Ongoing' },
+    { title: 'ダンジョン飯', media_type: 'Reading', content_type: 'Manga', status: 'Archived', tracking_status: 'Complete' },
+    { title: 'ある魔女が死ぬまで', media_type: 'Reading', content_type: 'Novel', status: 'Active', tracking_status: 'Complete' },
+    { title: '薬屋のひとりごと', media_type: 'Reading', content_type: 'Novel', status: 'Active', tracking_status: 'Ongoing' },
+    { title: 'ペルソナ5', media_type: 'Playing', content_type: 'Game', status: 'Active', tracking_status: 'Not Started' },
+    { title: 'STEINS;GATE', media_type: 'Playing', content_type: 'Game', status: 'Active', tracking_status: 'Ongoing' },
+    { title: 'Test Media', media_type: 'Reading', content_type: 'Manga', status: 'Active', tracking_status: 'Untracked' },
+  ];
+
+  const mediaIds: Record<string, number> = {};
+  for (const media of mediaList) {
+    const id = await post<number>('/media', {
+      id: null,
+      title: media.title,
+      media_type: media.media_type,
+      status: media.status || 'Active',
+      language: 'Japanese',
+      description: '',
+      cover_image: '',
+      extra_data: '{}',
+      content_type: media.content_type,
+      tracking_status: media.tracking_status || 'Untracked',
+    });
+    mediaIds[media.title] = id;
+  }
+
+  const addLog = async (title: string, duration: number, date: string): Promise<void> => {
+    const mediaId = mediaIds[title];
+    if (!mediaId) return;
+
+    await post('/logs', {
+      id: null,
+      media_id: mediaId,
+      duration_minutes: duration,
+      date,
+    });
+  };
+
+  await addLog('呪術廻戦', 30, '2024-03-31');
+  await addLog('ダンジョン飯', 25, '2024-03-08');
+  await addLog('ある魔女が死ぬまで', 45, '2024-03-07');
 }
 
 function resolveTauriDriverCommand(): string {
@@ -53,6 +159,9 @@ function resolveNativeDriverPath(): string | null {
   }
 
   if (process.platform === 'win32') {
+    const packaged = path.resolve(__dirname, '..', 'node_modules', 'edgedriver', 'bin', 'msedgedriver.exe');
+    if (existsSync(packaged)) return packaged;
+
     const local = path.resolve(__dirname, '..', 'node_modules', '.bin', 'edgedriver.cmd');
     if (existsSync(local)) return local;
   } else {
@@ -73,7 +182,24 @@ function onShutdown(fn: () => void) {
   process.on('SIGTERM', cleanup);
 }
 
-onShutdown(() => { tauriDriver?.kill(); });
+onShutdown(() => { sessionDriver?.kill(); });
+
+const allSpecsPattern = './specs/**/*.spec.ts';
+
+const defaultCapabilities: WebdriverIO.Capabilities[] = WEB_MODE
+  ? [{
+      browserName: 'MicrosoftEdge',
+      'ms:edgeOptions': {
+        args: ['--window-size=1280,1200'],
+      },
+    } as WebdriverIO.Capabilities]
+  : [{
+      'tauri:options': {
+        application: path.resolve(
+          __dirname, '..', 'src-tauri', 'target', 'debug', 'kechimochi'
+        ),
+      },
+    } as WebdriverIO.Capabilities];
 
 async function moveArtifactsToFinalDir(stageDir: string, specName: string, finalDir: string): Promise<void> {
   const { mkdirSync, existsSync, cpSync, rmSync, readdirSync } = await import('node:fs');
@@ -100,21 +226,14 @@ export const config: WebdriverIO.Config = {
   // ==================
   // Specs
   // ==================
-  specs: [
-    path.join(__dirname, 'specs', '**', '*.spec.ts'),
-  ],
+  specs: [allSpecsPattern],
+  exclude: [],
 
   // ==================
   // Capabilities
   // ==================
-  maxInstances: Number.parseInt(process.env.E2E_MAX_INSTANCES || '2', 10),
-  capabilities: [{
-    'tauri:options': {
-      application: path.resolve(
-        __dirname, '..', 'src-tauri', 'target', 'debug', 'kechimochi'
-      ),
-    },
-  } as WebdriverIO.Capabilities],
+  maxInstances: Number.parseInt(process.env.E2E_MAX_INSTANCES || (WEB_MODE ? '1' : '2'), 10),
+  capabilities: defaultCapabilities,
 
   // ==================
   // Test Configuration
@@ -177,6 +296,7 @@ export const config: WebdriverIO.Config = {
     mkdirSync(LOGS_DIR, { recursive: true });
     process.env.TEST_RUN_ID = STABLE_RUN_ID;
 
+    console.log(`[e2e] Test mode: ${E2E_MODE}`);
     console.log(`[e2e] Test run ID: ${STABLE_RUN_ID}`);
     console.log(`[e2e] Logs directory: ${LOGS_DIR}`);
   },
@@ -185,23 +305,27 @@ export const config: WebdriverIO.Config = {
    * Spawn tauri-driver right before each WebDriver session.
    * This is the correct hook per the official Tauri docs.
    */
-  beforeSession: async (_config: unknown, caps: TauriSessionCaps, specs: string[]) => {
+  beforeSession: async (_config: unknown, caps: SessionCaps, specs: string[]) => {
+    sessionDriverExitCode = undefined;
+
     const specFile = specs[0];
     const specName = path.basename(specFile, '.spec.ts');
     
-    // 1. Isolated Data Directory for this session
-    const testDir = prepareTestDir();
-    process.env.KECHIMOCHI_DATA_DIR = testDir;
+    // 1. Isolated Data Directory for this session in desktop mode
+    const testDir = WEB_MODE ? '' : prepareTestDir();
+    if (!WEB_MODE) {
+      process.env.KECHIMOCHI_DATA_DIR = testDir;
+    }
 
     // 2. Dynamic Port Assignment (offset by worker ID)
     // WDIO_WORKER_ID looks like "0-0", "0-1", etc.
     const workerIndex = Number.parseInt(process.env.WDIO_WORKER_ID?.split('-')[1] || '0', 10);
-    const tauriDriverPort = 4444 + workerIndex;
+    const webdriverPort = WEB_MODE ? 5555 + workerIndex : 4444 + workerIndex;
     const nativeDriverPort = 5555 + workerIndex;
     
     // Update capability port so WDIO connects to the correct driver
-    config.port = tauriDriverPort;
-    caps.port = tauriDriverPort;
+    config.port = webdriverPort;
+    caps.port = webdriverPort;
 
     // 3. Create a transient staging directory in /tmp
     const STAGE_DIR = path.join(os.tmpdir(), `kechimochi-e2e-${randomUUID()}`);
@@ -212,22 +336,24 @@ export const config: WebdriverIO.Config = {
     process.env.SPEC_NAME = specName;
 
     // 4. Pass isolated environment to the app via capabilities
-    caps['tauri:options'].envs = {
+    if (!WEB_MODE && caps['tauri:options']) {
+      caps['tauri:options'].envs = {
         ...caps['tauri:options'].envs,
-        KECHIMOCHI_DATA_DIR: testDir
-    };
+        KECHIMOCHI_DATA_DIR: testDir,
+      };
+    }
 
     // 5. Proactively create the requested subfolders
     mkdirSync(path.join(STAGE_DIR, 'visual', 'actual'), { recursive: true });
     mkdirSync(path.join(STAGE_DIR, 'visual', 'diff'), { recursive: true });
     mkdirSync(path.join(STAGE_DIR, 'ocr'), { recursive: true });
 
-    const logFile = path.join(STAGE_DIR, 'tauri-driver.log');
+    const logFile = path.join(STAGE_DIR, WEB_MODE ? 'edge-driver.log' : 'tauri-driver.log');
     appendFileSync(logFile, `[e2e] [${specName}] Session Started at ${new Date().toISOString()}\n`);
     appendFileSync(logFile, `[e2e] [${specName}] Worker ID: ${process.env.WDIO_WORKER_ID}\n`);
     appendFileSync(logFile, `[e2e] [${specName}] Staging Dir: ${STAGE_DIR}\n`);
-    appendFileSync(logFile, `[e2e] [${specName}] Data Dir: ${testDir}\n`);
-    appendFileSync(logFile, `[e2e] [${specName}] Driver Port: ${tauriDriverPort}\n\n`);
+    appendFileSync(logFile, `[e2e] [${specName}] Data Dir: ${testDir || 'n/a'}\n`);
+    appendFileSync(logFile, `[e2e] [${specName}] Driver Port: ${webdriverPort}\n\n`);
 
     // Helper to log safely even if stageDir disappears during move
     const log = (msg: string | Buffer) => {
@@ -237,72 +363,88 @@ export const config: WebdriverIO.Config = {
     };
 
     console.log(`\n[e2e] [${specName}] Worker ${process.env.WDIO_WORKER_ID} starting...`);
-    console.log(`[e2e] [${specName}] Port: ${tauriDriverPort}, Data: ${testDir}`);
+    console.log(`[e2e] [${specName}] Port: ${webdriverPort}, Data: ${testDir || 'n/a'}`);
 
-    // 5. Spawn driver
-    const nativeDriverPath = resolveNativeDriverPath();
-    const tauriDriverArgs = [
-      '--port', tauriDriverPort.toString(),
-      '--native-port', nativeDriverPort.toString(),
-    ];
-    if (nativeDriverPath) {
-      tauriDriverArgs.push('--native-driver', nativeDriverPath);
+    if (WEB_MODE) {
+      await seedWebTestData();
+
+      const { start: startEdgeDriver } = await import('edgedriver');
+      sessionDriver = await startEdgeDriver({
+        port: webdriverPort,
+        logLevel: 'INFO',
+      });
+      sessionDriver.stdout?.on('data', log);
+      sessionDriver.stderr?.on('data', log);
+      console.log(`[e2e] [${specName}] Waiting for Edge driver on port ${webdriverPort}...`);
+      await waitForPortOpen(webdriverPort);
+    } else {
+      const nativeDriverPath = resolveNativeDriverPath();
+      const tauriDriverArgs = [
+        '--port', webdriverPort.toString(),
+        '--native-port', nativeDriverPort.toString(),
+      ];
+      if (nativeDriverPath) {
+        tauriDriverArgs.push('--native-driver', nativeDriverPath);
+      }
+
+      sessionDriver = spawn(
+        resolveTauriDriverCommand(),
+        tauriDriverArgs,
+        {
+          stdio: [null, 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            KECHIMOCHI_DATA_DIR: testDir,
+            RUST_LOG: 'debug',
+            TAURI_DEBUG: '1',
+          },
+        }
+      );
+
+      sessionDriver.stdout?.on('data', log);
+      sessionDriver.stderr?.on('data', log);
+
+      // Wait for driver
+      console.log(`[e2e] [${specName}] Initializing tauri-driver (3s)...`);
+      await delay(3000);
     }
 
-    tauriDriver = spawn(
-      resolveTauriDriverCommand(),
-      tauriDriverArgs,
-      {
-        stdio: [null, 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          KECHIMOCHI_DATA_DIR: testDir,
-          RUST_LOG: 'debug',
-          TAURI_DEBUG: '1'
-        },
-      }
-    );
-
-    tauriDriver.stdout?.on('data', log);
-    tauriDriver.stderr?.on('data', log);
-
-    // Wait for driver
-    console.log(`[e2e] [${specName}] Initializing tauri-driver (3s)...`);
-    await delay(3000);
-
-    tauriDriver.on('error', (error: Error) => {
-      console.error(`[e2e] [${specName}] tauri-driver error:`, error);
-      log(`[e2e] tauri-driver error: ${error.message}\n`);
+    sessionDriver.on('error', (error: Error) => {
+      const driverLabel = WEB_MODE ? 'edge-driver' : 'tauri-driver';
+      console.error(`[e2e] [${specName}] ${driverLabel} error:`, error);
+      log(`[e2e] ${driverLabel} error: ${error.message}\n`);
       process.exit(1);
     });
 
-    tauriDriver.on('exit', (code: number | null) => {
-      console.log(`[e2e] [${specName}] tauri-driver process exited with code: ${code}`);
-      log(`[e2e] tauri-driver process exited with code: ${code}\n`);
-      tauriDriverExitCode = code;
+    sessionDriver.on('exit', (code: number | null) => {
+      const driverLabel = WEB_MODE ? 'edge-driver' : 'tauri-driver';
+      console.log(`[e2e] [${specName}] ${driverLabel} process exited with code: ${code}`);
+      log(`[e2e] ${driverLabel} process exited with code: ${code}\n`);
+      sessionDriverExitCode = code;
     });
   },
 
   /**
    * Move staged artifacts to final destination and kill driver.
    */
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   afterSession: async () => {
     // 1. Signal driver to stop
-    if (tauriDriver) {
+    if (sessionDriver) {
       const { appendFileSync } = await import('node:fs');
-      tauriDriver.kill('SIGTERM');
+      sessionDriver.kill('SIGTERM');
 
       // 2. WAIT for it to actually die before moving files
       let attempts = 0;
-      while (tauriDriverExitCode === undefined && attempts < 15) {
+      while (sessionDriverExitCode === undefined && attempts < 15) {
         await delay(200);
         attempts++;
       }
 
       const stageDir = process.env.SPEC_STAGE_DIR;
       if (stageDir) {
-        const logFile = path.join(stageDir, 'tauri-driver.log');
-        const finalCode = tauriDriverExitCode;
+        const logFile = path.join(stageDir, WEB_MODE ? 'edge-driver.log' : 'tauri-driver.log');
+        const finalCode = sessionDriverExitCode;
         try { appendFileSync(logFile, `\n[e2e] Session Complete with exit code: ${finalCode}\n`); } catch { /* ignore transient fs errors */ }
       }
     }
@@ -317,7 +459,7 @@ export const config: WebdriverIO.Config = {
 
     // 3. Clean up the isolated data directory
     const testDir = process.env.KECHIMOCHI_DATA_DIR;
-    if (testDir && specName) {
+    if (!WEB_MODE && testDir && specName) {
       cleanupTestDir(testDir);
       console.log(`[e2e] [${specName}] Cleaned up isolated data directory: ${testDir}`);
     }

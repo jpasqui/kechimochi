@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { getE2EBaseUrl, isWebMode } from './mode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, '..', 'fixtures');
@@ -65,6 +66,7 @@ async function normalizeWindowSize(): Promise<void> {
  * Waits for the app to be ready by polling for a known DOM element.
  * Also ensures the system date is mocked to 2024-03-31 for consistent stats/charts.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export async function waitForAppReady(timeout = 30000): Promise<void> {
   const MOCK_DATE = '2024-03-31';
   const startTs = Date.now();
@@ -73,6 +75,13 @@ export async function waitForAppReady(timeout = 30000): Promise<void> {
   const phaseBudget = (maxMs: number, minMs = 1000) => Math.max(minMs, Math.min(maxMs, Math.max(0, timeLeft() - reserveMs)));
 
   console.log(`[e2e] Ensuring app is ready and date is mocked to ${MOCK_DATE}...`);
+
+  if (isWebMode()) {
+    const currentUrl = await browser.getUrl().catch(() => '');
+    if (!currentUrl || currentUrl === 'about:blank') {
+      await browser.url(getE2EBaseUrl());
+    }
+  }
 
   // Keep visual snapshots deterministic across different host DPI settings.
   await normalizeWindowSize();

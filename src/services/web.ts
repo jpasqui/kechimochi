@@ -11,8 +11,19 @@ import type { Media, ActivityLog, ActivitySummary, DailyHeatmap, MediaCsvRow, Me
 
 const API_BASE: string = import.meta.env.VITE_API_BASE_URL || '';
 
+type MockGlobals = {
+    mockOpenPath?: string;
+    mockSavePath?: string;
+    mockOpenFileContent?: string;
+    mockDownloadedFiles?: Record<string, { filename: string; content: string }>;
+};
+
 function apiUrl(path: string): string {
     return `${API_BASE}/api${path}`;
+}
+
+function getMockGlobals(): MockGlobals {
+    return globalThis as unknown as MockGlobals;
 }
 
 async function parseJsonResponse<T>(res: Response): Promise<T> {
@@ -59,6 +70,12 @@ async function del<T>(path: string): Promise<T> {
 }
 
 function pickFile(accept: string): Promise<File | null> {
+    const mocks = getMockGlobals();
+    if (typeof mocks.mockOpenPath === 'string' && typeof mocks.mockOpenFileContent === 'string') {
+        const filename = mocks.mockOpenPath.split(/[\\/]/).pop() || 'mock.csv';
+        return Promise.resolve(new File([mocks.mockOpenFileContent], filename, { type: 'text/csv' }));
+    }
+
     return new Promise(resolve => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -70,7 +87,17 @@ function pickFile(accept: string): Promise<File | null> {
     });
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+async function triggerDownload(blob: Blob, filename: string): Promise<void> {
+    const mocks = getMockGlobals();
+    if (typeof mocks.mockSavePath === 'string' && mocks.mockSavePath.length > 0) {
+        const content = await blob.text();
+        mocks.mockDownloadedFiles = {
+            ...(mocks.mockDownloadedFiles ?? {}),
+            [mocks.mockSavePath]: { filename, content },
+        };
+        return;
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -123,7 +150,7 @@ export class WebServices implements AppServices {
         const res = await fetch(apiUrl(`/export/activities?${params}`));
         if (!res.ok) throw new Error(await res.text());
         const blob = await res.blob();
-        triggerDownload(blob, 'kechimochi_activities.csv');
+        await triggerDownload(blob, 'kechimochi_activities.csv');
         return Number.parseInt(res.headers.get('X-Row-Count') ?? '0', 10);
     }
 
@@ -141,7 +168,7 @@ export class WebServices implements AppServices {
         const res = await fetch(apiUrl('/export/media'));
         if (!res.ok) throw new Error(await res.text());
         const blob = await res.blob();
-        triggerDownload(blob, 'kechimochi_media_library.csv');
+        await triggerDownload(blob, 'kechimochi_media_library.csv');
         return Number.parseInt(res.headers.get('X-Row-Count') ?? '0', 10);
     }
 
@@ -174,7 +201,7 @@ export class WebServices implements AppServices {
         const res = await fetch(apiUrl('/export/milestones'));
         if (!res.ok) throw new Error(await res.text());
         const blob = await res.blob();
-        triggerDownload(blob, 'kechimochi_milestones.csv');
+        await triggerDownload(blob, 'kechimochi_milestones.csv');
         return Number.parseInt(res.headers.get('X-Row-Count') ?? '0', 10);
     }
 

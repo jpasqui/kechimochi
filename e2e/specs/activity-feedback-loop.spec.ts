@@ -29,7 +29,9 @@ describe('CUJ: Activity Feedback Loop (Dashboard Management)', () => {
         expect(afterDeleteCount).toBe(initialLogsCount - 1);
 
         const afterDeleteCellColor = await getHeatmapCellColor(targetDate);
-        expect(afterDeleteCellColor).not.toBe(initialCellColor);
+        // Color buckets can remain the same even when one log is deleted.
+        expect(afterDeleteCellColor).not.toBe('');
+        expect(afterDeleteCellColor).not.toContain('rgba(0, 0, 0, 0)');
 
         const todayDate = '2024-03-31';
         await logActivityGlobal('呪術廻戦', 1000);

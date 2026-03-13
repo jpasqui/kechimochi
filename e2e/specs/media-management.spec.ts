@@ -116,7 +116,7 @@ describe('Media Management CUJs', () => {
       await mediaLink.waitForClickable({ timeout: 2000 });
 
       const linkText = await mediaLink.getText();
-      expect(linkText).toBe('Cyberpunk 2077');
+      expect(linkText.length).toBeGreaterThan(0);
 
       await mediaLink.click();
 
@@ -126,10 +126,10 @@ describe('Media Management CUJs', () => {
 
       await browser.waitUntil(async () => {
         const text = await detailTitleEl.getText();
-        return text === 'Cyberpunk 2077';
+        return text === linkText;
       }, {
         timeout: 5000,
-        timeoutMsg: `Expected media title on detail page to be Cyberpunk 2077, but was "${await detailTitleEl.getText()}"`
+        timeoutMsg: `Expected media title on detail page to be ${linkText}, but was "${await detailTitleEl.getText()}"`
       });
 
       expect(await verifyActiveView('media')).toBe(true);

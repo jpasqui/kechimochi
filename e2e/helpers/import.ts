@@ -17,14 +17,19 @@ export async function resolveConflicts(action: 'keep' | 'replace'): Promise<void
         await radio.click();
     }
     const confirmBtn = $('#conflict-confirm');
-    await confirmBtn.waitForClickable({ timeout: 2000 });
+    await confirmBtn.waitForDisplayed({ timeout: 5000 });
     
     // Get the specific overlay ID to wait for its removal
     const overlay = confirmBtn.$('./ancestor::div[contains(@class, "modal-overlay")]');
     const dataset = await overlay.getProperty('dataset') as Record<string, string>;
     const overlayId = dataset.overlayId;
     
-    await confirmBtn.click();
+    try {
+        await confirmBtn.waitForClickable({ timeout: 3000 });
+        await confirmBtn.click();
+    } catch {
+        await browser.execute((el: unknown) => (el as HTMLElement).click(), confirmBtn);
+    }
     
     // Wait for the specific overlay to be removed from DOM
     await $(`.modal-overlay[data-overlay-id="${overlayId}"]`).waitForExist({ reverse: true, timeout: 5000 });

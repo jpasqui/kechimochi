@@ -4,6 +4,8 @@ import { submitPrompt } from '../helpers/common.js';
 
 describe('Factory Reset CUJ', () => {
   before(async () => {
+    await waitForAppReady();
+
     // We set the profile in localStorage and THEN refresh to ensure the app picks it up
     await browser.execute(() => {
         localStorage.clear();

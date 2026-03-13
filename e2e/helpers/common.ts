@@ -5,6 +5,8 @@
 /// <reference types="@wdio/visual-service" />
 /// <reference types="@wdio/ocr-service" />
 import path from 'node:path';
+import { setDialogMockPath as setPlatformDialogMockPath } from './platform-ops.js';
+import { isWebMode } from './mode.js';
 
 /**
  * Use OCR to verify text is visible on screen.
@@ -40,6 +42,7 @@ export async function assertTextVisible(text: string): Promise<void> {
  */
 export async function takeAndCompareScreenshot(tag: string): Promise<void> {
   const stageDir = process.env.SPEC_STAGE_DIR;
+  const effectiveTag = isWebMode() && !tag.endsWith('-web') ? `${tag}-web` : tag;
 
   const options: Record<string, string> = {};
   if (stageDir) {
@@ -54,7 +57,7 @@ export async function takeAndCompareScreenshot(tag: string): Promise<void> {
     options.diffFolder = diffFolder;
   }
 
-  const result = await browser.checkScreen(tag, options);
+  const result = await browser.checkScreen(effectiveTag, options);
 
   // High tolerance for environmental rendering noise
   expect(result).toBeLessThanOrEqual(10);
@@ -142,8 +145,5 @@ export async function confirmAction(ok: boolean = true): Promise<void> {
  * Sets the mock path for file save/open dialogs in Tauri.
  */
 export async function setDialogMockPath(filePath: string): Promise<void> {
-    await browser.execute((p) => {
-        (globalThis as unknown as { mockSavePath: string, mockOpenPath: string }).mockSavePath = p;
-        (globalThis as unknown as { mockSavePath: string, mockOpenPath: string }).mockOpenPath = p;
-    }, filePath);
+  await setPlatformDialogMockPath(filePath);
 }

@@ -5,6 +5,7 @@ import {
   verifyViewNotBroken,
 } from '../helpers/navigation.js';
 import { takeAndCompareScreenshot } from '../helpers/common.js';
+import { isWebMode } from '../helpers/mode.js';
 
 describe('Media Grid CUJ', () => {
   before(async () => {
@@ -24,22 +25,29 @@ describe('Media Grid CUJ', () => {
   it('should have a working search bar', async () => {
     const searchInput = await $('#grid-search-filter');
     if (await searchInput.isExisting()) {
-      await searchInput.setValue('呪術廻戦');
-      await browser.pause(500);
+      const seedTitle = await browser.execute(() => {
+        const firstItem = document.querySelector('.media-grid-item');
+        return firstItem?.getAttribute('data-title') || firstItem?.textContent || '';
+      }) as string;
+      const query = seedTitle.trim().slice(0, Math.max(1, Math.min(4, seedTitle.trim().length)));
 
-      // After filtering, fewer items should be visible
-      const items = await $$('.media-grid-item');
-      let visibleCount = 0;
-      // Use a standard loop to avoid iterability issues with WDIO element arrays
-      const itemsCount = await items.length;
-      for (let i = 0; i < itemsCount; i++) {
-        if (await items[i].isDisplayed()) {
-          visibleCount++;
-        }
-      }
-      
-      expect(visibleCount).toBeGreaterThan(0);
-      expect(visibleCount).toBeLessThanOrEqual(10);
+      expect(query.length).toBeGreaterThan(0);
+
+      await searchInput.setValue(query);
+      await browser.waitUntil(async () => {
+        const gridState = await browser.execute(() => {
+          const items = Array.from(document.querySelectorAll('.media-grid-item'));
+          return {
+            count: items.length,
+            titles: items.map((item) => item.getAttribute('data-title') || item.textContent || ''),
+          };
+        }) as { count: number; titles: string[] };
+
+        return gridState.count > 0 && gridState.titles.every((title) => title.toLowerCase().includes(query.toLowerCase()));
+      }, {
+        timeout: 5000,
+        timeoutMsg: 'Search filter did not narrow the media grid as expected',
+      });
 
       // Clear the search
       await searchInput.clearValue();
@@ -69,6 +77,6 @@ describe('Media Grid CUJ', () => {
     // Navigate back to grid first
     await navigateTo('media');
     await browser.pause(500);
-    await takeAndCompareScreenshot('media-grid');
+    await takeAndCompareScreenshot(isWebMode() ? 'media-grid-web' : 'media-grid');
   });
 });

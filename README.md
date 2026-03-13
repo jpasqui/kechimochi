@@ -226,7 +226,7 @@ npx tsc --noEmit
 ```
 
 #### End-to-End (E2E) Tests
-Kechimochi uses WebdriverIO and Tauri Driver for automated E2E testing. These tests run on isolated temporary databases and do not affect your personal data.
+Kechimochi uses WebdriverIO for automated E2E testing in both desktop (Tauri) and web modes.
 
 **Setup E2E Prerequisites:**
 Ensure `tauri-driver` is installed:
@@ -234,18 +234,39 @@ Ensure `tauri-driver` is installed:
 cargo install tauri-driver
 ```
 
-**Run E2E Tests:**
-The `npm run e2e` command builds the app in debug mode, seeds the test databases, and executes the full suite:
+**Run Desktop E2E (default):**
+The `npm run e2e` command seeds test databases and runs desktop-mode E2E (Tauri):
 
 ```bash
 npm run e2e
 ```
 
+You can also run desktop mode directly:
+
+```bash
+npm run e2e:test:desktop
+```
+
+**Run Web E2E:**
+Start the web stack in one terminal:
+
+```bash
+npm run web:start
+```
+
+Then run web-mode E2E in another terminal:
+
+```bash
+npm run e2e:test:web
+```
+
+Web mode currently excludes desktop-specific file dialog/export specs while portability work is in progress.
+
 **Parallel Execution:**
 Tests run in parallel by default (2 instances). You can configure the number of parallel workers using the `E2E_MAX_INSTANCES` environment variable:
 
 ```bash
-E2E_MAX_INSTANCES=4 npm run e2e:test
+E2E_MAX_INSTANCES=4 npm run e2e:test:desktop
 ```
 
 **Run Specific Specs:**

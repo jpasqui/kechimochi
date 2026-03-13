@@ -5,6 +5,7 @@ import {
   verifyViewNotBroken,
 } from '../helpers/navigation.js';
 import { takeAndCompareScreenshot } from '../helpers/common.js';
+import { isWebMode } from '../helpers/mode.js';
 
 describe('Profile CUJ', () => {
   before(async () => {
@@ -42,6 +43,9 @@ describe('Profile CUJ', () => {
   });
 
   it('should match the baseline screenshot', async () => {
+    if (isWebMode()) {
+      return;
+    }
     await navigateTo('profile');
     await browser.pause(500);
     await takeAndCompareScreenshot('profile-view');

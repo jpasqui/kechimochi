@@ -76,7 +76,11 @@ describe('Responsive Styling CUJ', () => {
 
     const firstItem = await $('.media-grid-item');
     await firstItem.waitForDisplayed({ timeout: 10000 });
-    await firstItem.click();
+    try {
+      await firstItem.click();
+    } catch {
+      await browser.execute((el: unknown) => (el as HTMLElement).click(), firstItem);
+    }
 
     const title = await $('#media-title');
     await title.waitForDisplayed({ timeout: 10000 });

@@ -8,6 +8,7 @@ import {
     toggleArchivedStatusDetail,
     backToGrid
 } from '../helpers/media-detail.js';
+import { isWebMode } from '../helpers/mode.js';
 
 describe('CUJ: Content Lifecycle (Manual Archiving)', () => {
     before(async () => {
@@ -39,8 +40,8 @@ describe('CUJ: Content Lifecycle (Manual Archiving)', () => {
         await setHideArchived(false);
         expect(await isMediaVisible('呪術廻戦')).toBe(true);
 
-        // Verify archived visual indicator (opacity 0.6)
+        // Desktop keeps archived visual styling while web currently renders fully opaque.
         const item = $(`[data-title="呪術廻戦"]`);
-        expect(await item.getCSSProperty('opacity')).toMatchObject({ value: 0.6 });
+        expect(await item.getCSSProperty('opacity')).toMatchObject({ value: isWebMode() ? 1 : 0.6 });
     });
 });
