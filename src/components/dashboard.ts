@@ -1,7 +1,7 @@
 import { Component } from '../core/component';
 import { html, escapeHTML } from '../core/html';
 import { getLogs, getHeatmap, getAllMedia, ActivitySummary, DailyHeatmap, deleteLog, Media, getSetting, setSetting } from '../api';
-import { customConfirm } from '../modals';
+import { customConfirm, showLogActivityModal } from '../modals';
 import { StatsCard } from './dashboard/StatsCard';
 import { HeatmapView } from './dashboard/HeatmapView';
 import { ActivityCharts } from './dashboard/ActivityCharts';
@@ -140,7 +140,7 @@ export class Dashboard extends Component<DashboardState> {
         this.clear();
         this.statsComponent = null;
         this.heatmapComponent = null;
-        
+
         const root = html`<div class="dashboard-root animate-fade-in" style="display: flex; flex-direction: column; gap: 2rem;"></div>`;
         this.container.appendChild(root);
 
@@ -194,14 +194,14 @@ export class Dashboard extends Component<DashboardState> {
     private updateHeatmap() {
         if (this.containers.heatmap) {
             if (this.heatmapComponent) {
-                this.heatmapComponent.setState({ 
-                    heatmapData: this.state.heatmapData, 
-                    year: this.state.currentHeatmapYear 
+                this.heatmapComponent.setState({
+                    heatmapData: this.state.heatmapData,
+                    year: this.state.currentHeatmapYear
                 });
             } else {
-                this.heatmapComponent = new HeatmapView(this.containers.heatmap, { 
-                    heatmapData: this.state.heatmapData, 
-                    year: this.state.currentHeatmapYear 
+                this.heatmapComponent = new HeatmapView(this.containers.heatmap, {
+                    heatmapData: this.state.heatmapData,
+                    year: this.state.currentHeatmapYear
                 }, (dir) => {
                     this.setState({ currentHeatmapYear: this.state.currentHeatmapYear + dir });
                 });
@@ -218,7 +218,7 @@ export class Dashboard extends Component<DashboardState> {
             { logs: this.state.logs, ...this.state.chartParams },
             (newParams) => {
                 this.setState({ chartParams: { ...this.state.chartParams, ...newParams } });
-                
+
                 // Persist changes
                 if (newParams.chartType) {
                     setSetting(SETTING_KEYS.DASHBOARD_CHART_TYPE, newParams.chartType)
@@ -243,11 +243,11 @@ export class Dashboard extends Component<DashboardState> {
 
         // Update Pagination
         if (showPagination) {
-            const prevButtonHtml = currentPage > 1 
-                ? `<button class="btn btn-ghost" id="prev-page" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&lt;&lt;</button>` 
+            const prevButtonHtml = currentPage > 1
+                ? `<button class="btn btn-ghost" id="prev-page" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&lt;&lt;</button>`
                 : '<div style="width: 3rem;"></div>';
-            const nextButtonHtml = currentPage < totalPages 
-                ? `<button class="btn btn-ghost" id="next-page" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&gt;&gt;</button>` 
+            const nextButtonHtml = currentPage < totalPages
+                ? `<button class="btn btn-ghost" id="next-page" style="font-size: 1.2rem; padding: 0.2rem 1rem;">&gt;&gt;</button>`
                 : '<div style="width: 3rem;"></div>';
 
             this.containers.pagination.innerHTML = `
@@ -336,11 +336,11 @@ export class Dashboard extends Component<DashboardState> {
 
             let activityDesc = '';
             if (log.duration_minutes > 0 && log.characters > 0) {
-                activityDesc = `<span>${escapeHTML(formatLoggedDuration(log.duration_minutes))}</span> <span style="color: var(--text-secondary);">and</span> <span>${log.characters.toLocaleString()} characters</span>`;
+                activityDesc = `<span>${escapeHTML(formatLoggedDuration(log.duration_minutes, true))}</span> <span style="color: var(--text-secondary);">and</span> <span>${escapeHTML(log.characters.toLocaleString())} characters</span>`;
             } else if (log.duration_minutes > 0) {
-                activityDesc = `<span>${escapeHTML(formatLoggedDuration(log.duration_minutes))}</span>`;
+                activityDesc = `<span>${escapeHTML(formatLoggedDuration(log.duration_minutes, true))}</span>`;
             } else if (log.characters > 0) {
-                activityDesc = `<span>${log.characters.toLocaleString()} characters</span>`;
+                activityDesc = `<span>${escapeHTML(log.characters.toLocaleString())} characters</span>`;
             }
 
             return `
@@ -355,9 +355,14 @@ export class Dashboard extends Component<DashboardState> {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <div style="color: var(--text-secondary);">${escapedDate}</div>
-                        <button class="btn btn-danger btn-sm delete-log-btn" data-id="${log.id}" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background-color: #ff4757 !important; color: #ffffff !important; border: none; cursor: pointer;">Delete</button>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="color: var(--text-secondary); margin-right: 0.5rem;">${escapedDate}</div>
+                        <button class="btn btn-ghost btn-sm edit-log-btn" data-id="${log.id}" title="Edit Log" style="padding: 2px 6px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                        <button class="btn btn-ghost btn-sm delete-log-btn" data-id="${log.id}" title="Delete Log" style="padding: 2px 6px; color: var(--error);">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
                     </div>
                 </div>
             `;
@@ -368,13 +373,23 @@ export class Dashboard extends Component<DashboardState> {
             setupCopyButton(btn as HTMLElement, title);
         });
 
-        list.querySelectorAll('.delete-log-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = Number.parseInt((e.target as HTMLElement).dataset.id!, 10);
+        list.querySelectorAll('.edit-log-btn').forEach((btn, idx) => {
+            btn.addEventListener('click', async () => {
+                const log = pagedLogs[idx];
+                const success = await showLogActivityModal(log.title, log);
+                if (success) {
+                    await this.loadData();
+                }
+            });
+        });
+
+        list.querySelectorAll('.delete-log-btn').forEach((btn, idx) => {
+            btn.addEventListener('click', () => {
+                const log = pagedLogs[idx];
                 (async () => {
                     const confirm = await customConfirm("Delete Log", "Are you sure you want to permanently delete this log entry?");
                     if (confirm) {
-                        await deleteLog(id);
+                        await deleteLog(log.id);
                         await this.loadData();
                     }
                 })().catch(err => Logger.error("Failed to delete log", err));
