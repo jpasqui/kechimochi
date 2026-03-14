@@ -32,25 +32,25 @@ fn default_data_dir_from_identifier() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
         let appdata = std::env::var("APPDATA").expect("APPDATA env var not set");
-        return PathBuf::from(appdata).join(app_id);
+        PathBuf::from(appdata).join(app_id)
     }
 
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var("HOME").expect("HOME env var not set");
-        return PathBuf::from(home)
+        PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join(app_id);
+            .join(app_id)
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let home = std::env::var("HOME").expect("HOME env var not set");
-        return PathBuf::from(home)
+        PathBuf::from(home)
             .join(".local")
             .join("share")
-            .join(app_id);
+            .join(app_id)
     }
 }
 
