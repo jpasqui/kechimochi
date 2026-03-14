@@ -32,6 +32,13 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: install system dependencies (linux web)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libglib2.0-dev \
+            pkg-config
+
       - name: set artifact version
         id: web_versioning
         run: |
@@ -45,17 +52,16 @@ jobs:
       - name: package web artifact payload
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release-web/linux | Out-Null
-          Copy-Item -Recurse dist release-web/linux/dist
-          Copy-Item src-tauri/target/release/web_server release-web/linux/web_server
-          Copy-Item README.md release-web/linux/README.md
-          Compress-Archive -Path release-web/linux/* -DestinationPath release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}.zip -Force
+          New-Item -ItemType Directory -Force -Path release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }} | Out-Null
+          Copy-Item -Recurse dist release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}/dist
+          Copy-Item src-tauri/target/release/web_server release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}/web_server
+          Copy-Item README.md release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}/README.md
 
       - name: upload web artifact
         uses: actions/upload-artifact@v4
         with:
           name: kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}
-          path: release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}.zip
+          path: release-web/kechimochi-web-linux-${{ steps.web_versioning.outputs.VERSION }}/
 
   publish-web-windows:
     runs-on: windows-latest
@@ -96,17 +102,16 @@ jobs:
       - name: package web artifact payload
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release-web/windows | Out-Null
-          Copy-Item -Recurse dist release-web/windows/dist
-          Copy-Item src-tauri/target/release/web_server.exe release-web/windows/web_server.exe
-          Copy-Item README.md release-web/windows/README.md
-          Compress-Archive -Path release-web/windows/* -DestinationPath release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}.zip -Force
+          New-Item -ItemType Directory -Force -Path release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }} | Out-Null
+          Copy-Item -Recurse dist release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}/dist
+          Copy-Item src-tauri/target/release/web_server.exe release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}/web_server.exe
+          Copy-Item README.md release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}/README.md
 
       - name: upload web artifact
         uses: actions/upload-artifact@v4
         with:
           name: kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}
-          path: release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}.zip
+          path: release-web/kechimochi-web-windows-${{ steps.web_versioning.outputs.VERSION }}/
 
   publish-linux:
     runs-on: ubuntu-latest
