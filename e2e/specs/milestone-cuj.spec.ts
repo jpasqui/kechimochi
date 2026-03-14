@@ -1,7 +1,7 @@
 import { waitForAppReady } from '../helpers/setup.js';
 import { navigateTo, verifyActiveView } from '../helpers/navigation.js';
-import { addMedia } from '../helpers/library.js';
-import { setDialogMockPath } from '../helpers/common.js';
+import { addMedia, clickMediaItem } from '../helpers/library.js';
+import { setDialogMockPath, dismissAlert, closeModal } from '../helpers/common.js';
 import { addMilestone, deleteMilestone, clearAllMilestones, getMilestoneListText } from '../helpers/media-detail.js';
 import { exportMilestones, importMilestones } from '../helpers/profile.js';
 import fs from 'node:fs';
@@ -33,26 +33,48 @@ describe('Milestone CUJ Test', () => {
         expect(await $('#btn-clear-milestones').isExisting()).toBe(false);
 
         // Add standard milestone (121m -> 2h1min)
-        await addMilestone('First Milestone', '0', '121');
+        await addMilestone('First Milestone', '0', '121', '0');
 
+        const firstMilestone = $(`.milestone-item[data-milestone-name="First Milestone"]`);
         await browser.waitUntil(async () => {
-            const text = await getMilestoneListText();
-            return text.includes('First Milestone') && text.includes('2h1min');
-        }, { timeout: 10000, timeoutMsg: 'Milestone was not correctly added or formatted' });
+            if (!(await firstMilestone.isExisting())) return false;
+            const text = await firstMilestone.getText();
+            return text.includes('2h1min');
+        }, { timeout: 5000, timeoutMsg: 'Milestone "First Milestone" did not show expected duration' });
 
         expect(await $('#btn-clear-milestones').isDisplayed()).toBe(true);
 
         // Add dated milestone
-        const selectedDate = await addMilestone('Dated Milestone', '1', '20', true);
+        const selectedDate = await addMilestone('Dated Milestone', '1', '20', '0', true);
 
         await browser.waitUntil(async () => {
-            const items = await $$('.milestone-item');
+            const items = $$('.milestone-item');
             return (await items.length) === 2;
-        }, { timeout: 10000 });
+        }, { timeout: 5000, timeoutMsg: 'Expected 2 milestones after adding Dated Milestone' });
 
         const datedItem = $(`.milestone-item[title="Achieved on ${selectedDate}"]`);
         await datedItem.waitForExist({ timeout: 5000 });
         expect(await datedItem.isExisting()).toBe(true);
+
+        // Add character-only milestone
+        await addMilestone('Char Milestone', '0', '0', '1000');
+        const charMilestone = $(`.milestone-item[data-milestone-name="Char Milestone"]`);
+        await browser.waitUntil(async () => {
+            if (!(await charMilestone.isExisting())) return false;
+            const text = await charMilestone.getText();
+            return /1,?000 chars/.test(text);
+        }, { timeout: 5000, timeoutMsg: 'Milestone "Char Milestone" did not show expected character count' });
+
+        // Verify validation for 0 duration and 0 characters
+        await $('#btn-add-milestone').click();
+        await $('#milestone-name').setValue('Invalid Milestone');
+        await $('#milestone-hours').setValue('0');
+        await $('#milestone-minutes').setValue('0');
+        await $('#milestone-characters').setValue('0');
+        await $('#milestone-confirm').click();
+
+        await dismissAlert('Please enter either duration or characters.');
+        await closeModal('#milestone-cancel');
     });
 
     it('should support single and bulk deletion', async () => {
@@ -60,13 +82,15 @@ describe('Milestone CUJ Test', () => {
         await deleteMilestone(1);
 
         await browser.waitUntil(async () => {
-            const items = await $$('.milestone-item');
-            return (await items.length) === 1;
-        }, { timeout: 10000 });
+            // Re-fetch items inside the loop to avoid stale element references
+            const items = $$('.milestone-item');
+            return (await items.length) === 2;
+        }, { timeout: 5000, timeoutMsg: 'Expected 2 milestones after deleting one' });
 
         const textAfterSingle = await getMilestoneListText();
         expect(textAfterSingle).not.toContain('Dated Milestone');
         expect(textAfterSingle).toContain('First Milestone');
+        expect(textAfterSingle).toContain('Char Milestone');
 
         // Bulk clear
         await clearAllMilestones();
@@ -74,14 +98,14 @@ describe('Milestone CUJ Test', () => {
         await browser.waitUntil(async () => {
             const text = await getMilestoneListText();
             return text.includes('No milestones yet.');
-        }, { timeout: 10000 });
+        }, { timeout: 3000, timeoutMsg: 'Milestones were not cleared' });
 
         expect(await $('#btn-clear-milestones').isExisting()).toBe(false);
     });
 
     it('should support CSV export and recovery', async () => {
         // Preparation: Add a milestone to export
-        await addMilestone('Recovery Milestone', '2', '30');
+        await addMilestone('Recovery Milestone', '2', '30', '0');
 
         await navigateTo('profile');
         expect(await verifyActiveView('profile')).toBe(true);
@@ -93,9 +117,7 @@ describe('Milestone CUJ Test', () => {
 
         // Clear state before import
         await navigateTo('media');
-        const gridItem = $(`.media-grid-item[data-title="${mediaTitle}"]`);
-        await gridItem.waitForDisplayed({ timeout: 15000 });
-        await gridItem.click();
+        await clickMediaItem(mediaTitle);
         await clearAllMilestones();
 
         // Import
@@ -105,10 +127,7 @@ describe('Milestone CUJ Test', () => {
 
         // Final verification
         await navigateTo('media');
-        await browser.pause(2000);
-        const finalGridItem = $(`.media-grid-item[data-title="${mediaTitle}"]`);
-        await finalGridItem.waitForDisplayed({ timeout: 15000 });
-        await finalGridItem.click();
+        await clickMediaItem(mediaTitle);
 
         await browser.waitUntil(async () => {
             const text = await getMilestoneListText();
