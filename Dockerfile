@@ -35,9 +35,14 @@ COPY --from=backend /app/src-tauri/target/release/web_server ./web_server
 COPY --from=frontend /app/dist ./dist
 
 # Data is stored in /data; mount a volume there to persist across updates.
+RUN groupadd --gid 10001 kechimochi \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin kechimochi \
+    && mkdir -p /data \
+    && chown -R kechimochi:kechimochi /app /data
 VOLUME /data
 ENV KECHIMOCHI_DATA_DIR=/data
 ENV PORT=3000
 ENV HOST=0.0.0.0
 EXPOSE 3000
+USER kechimochi
 CMD ["./web_server"]

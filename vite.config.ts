@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const host = process.env.TAURI_DEV_HOST;
 const webHost = process.env.WEB_HOST;
@@ -7,7 +7,7 @@ const apiTarget = process.env.VITE_API_BASE_URL || "http://127.0.0.1:3000";
 
 let gitHash: string;
 try {
-    gitHash = execSync("git rev-parse --short HEAD").toString().trim();
+  gitHash = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
 } catch {
     gitHash = process.env.VITE_GIT_HASH ?? "unknown";
 }
