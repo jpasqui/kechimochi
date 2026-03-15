@@ -48,10 +48,10 @@ This will start the Vite development server for the frontend and compile the Rus
 You can also run Kechimochi as a web application. This requires starting both the frontend development server and a separate Rust backend API server.
 
 ```bash
-npm run web:start
+npm run web
 ```
 
-This command uses `concurrently` to launch both the Vite server (on port 1420) and the Rust web server (on port 3000). You can then access the app via `http://localhost:1420`.
+You can then access the app via `http://localhost:3000`.
 
 ## Testing and Quality Assurance
 

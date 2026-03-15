@@ -63,7 +63,7 @@ type Shared = Arc<AppState>;
 
 #[tokio::main]
 async fn main() {
-    let data_dir = db::get_data_dir_standalone();
+    let data_dir = db::get_data_dir(&db::STANDALONE_DATA_DIR_PROVIDER);
     println!("[kechimochi] data dir: {}", data_dir.display());
 
     let profiles = db::list_profiles(data_dir.clone()).unwrap_or_default();
