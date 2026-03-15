@@ -22,6 +22,7 @@ describe('CUJ: Bulk Management (Data Import)', () => {
 
         await setDialogMockPath(MEDIA_CSV);
         const importMediaBtn = $('#profile-btn-import-media');
+        await importMediaBtn.waitForClickable({ timeout: 5000 });
         await importMediaBtn.click();
 
         // Our bulk_media.csv contains "呪術廻戦" which exists, so conflict modal will show.
@@ -37,21 +38,17 @@ describe('CUJ: Bulk Management (Data Import)', () => {
         
         await setDialogMockPath(ACTIVITY_CSV);
         const importActivitiesBtn = $('#profile-btn-import-csv');
+        await importActivitiesBtn.waitForClickable({ timeout: 5000 });
         await importActivitiesBtn.click();
 
-        $('#alert-ok').waitForDisplayed({ timeout: 5000 });
         await dismissAlert();
 
         await navigateTo('dashboard');
         expect(await verifyActiveView('dashboard')).toBe(true);
 
-        const recentLogs = $('#recent-logs-list');
-        await browser.waitUntil(async () => {
-            const text = await recentLogs.getText();
-            return text.includes('Bulk Imported Manga') && text.includes('60 minutes');
-        }, {
-            timeout: 10000,
-            timeoutMsg: 'Imported activity logs did not appear on the dashboard after 10s'
-        });
+        const recentLog = $(`.dashboard-activity-item[data-activity-title="Bulk Imported Manga"]`);
+        await recentLog.waitForExist({ timeout: 5000 });
+        const text = await recentLog.getText();
+        expect(text).toContain('60 Minutes');
     });
 });

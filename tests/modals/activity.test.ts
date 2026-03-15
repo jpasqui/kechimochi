@@ -6,6 +6,7 @@ import { Media } from '../../src/api';
 vi.mock('../../src/api', () => ({
     getAllMedia: vi.fn(),
     addLog: vi.fn(),
+    updateLog: vi.fn(),
     addMedia: vi.fn(),
     updateMedia: vi.fn(),
 }));
@@ -16,6 +17,7 @@ vi.mock('../../src/modals/calendar', () => ({
 
 vi.mock('../../src/modals/base', () => ({
     customPrompt: vi.fn(),
+    customAlert: vi.fn(),
     createOverlay: vi.fn(() => {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -58,6 +60,7 @@ describe('modals/activity.ts', () => {
             expect(api.addLog).toHaveBeenCalledWith({
                 media_id: 10,
                 duration_minutes: 45,
+                characters: 0,
                 date: expect.any(String)
             });
         });
@@ -130,6 +133,80 @@ describe('modals/activity.ts', () => {
              
              const result = await promise;
              expect(result).toBe(false);
+        });
+
+        it('should show alert if both duration and characters are 0', async () => {
+            vi.mocked(api.getAllMedia).mockResolvedValue([{ id: 1, title: 'Item 1', status: 'Active', tracking_status: 'Ongoing' }] as unknown as Media[]);
+            const { customAlert } = await import('../../src/modals/base');
+            
+            showLogActivityModal();
+            await vi.waitFor(() => document.querySelector('#add-activity-form'));
+            
+            const titleInput = document.querySelector('#activity-media') as HTMLInputElement;
+            titleInput.value = 'Item 1';
+            // Duration and characters are 0 by default
+            
+            document.querySelector('#add-activity-form')!.dispatchEvent(new Event('submit'));
+            
+            await vi.waitFor(() => {
+                expect(customAlert).toHaveBeenCalledWith("Input Required", expect.any(String));
+            });
+        });
+
+        it('should have custom validation message for media title', async () => {
+             vi.mocked(api.getAllMedia).mockResolvedValue([]);
+             showLogActivityModal();
+             await vi.waitFor(() => document.querySelector('#activity-media'));
+             
+             const titleInput = document.querySelector('#activity-media') as HTMLInputElement;
+             expect(titleInput.getAttribute('oninvalid')).toContain('Media Title is required');
+        });
+
+        it('should handle edit mode correctly', async () => {
+            const editLog = {
+                id: 123,
+                media_id: 456,
+                title: 'Test Media',
+                media_type: 'Reading',
+                duration_minutes: 30,
+                characters: 100,
+                date: '2024-03-01',
+                language: 'Japanese'
+            };
+            
+            vi.mocked(api.getAllMedia).mockResolvedValue([{ 
+                id: 456, 
+                title: 'Test Media',
+                media_type: 'Reading',
+                status: 'Active',
+                language: 'Japanese',
+                description: '',
+                cover_image: '',
+                extra_data: '{}',
+                content_type: 'Novel',
+                tracking_status: 'Ongoing'
+            }]);
+            
+            const promise = showLogActivityModal(undefined, editLog);
+            await vi.waitFor(() => document.querySelector('#activity-media'));
+            
+            const titleInput = document.querySelector('#activity-media') as HTMLInputElement;
+            expect(titleInput.value).toBe('Test Media');
+            expect(titleInput.disabled).toBe(true);
+            
+            const durationInput = document.querySelector('#activity-duration') as HTMLInputElement;
+            expect(durationInput.value).toBe('30');
+            durationInput.value = '45';
+            
+            const confirmBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+            confirmBtn.click();
+            
+            await promise;
+            
+            expect(api.updateLog).toHaveBeenCalledWith(expect.objectContaining({
+                id: 123,
+                duration_minutes: 45
+            }));
         });
     });
 

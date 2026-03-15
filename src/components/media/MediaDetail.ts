@@ -123,7 +123,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                                     <h4 style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Milestones</h4>
                                     <button class="btn btn-ghost" id="btn-add-milestone" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 4px;">+ Add</button>
                                 </div>
-                                <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-height: 0; max-height: 400px; overflow-y: auto;">
+                                <div id="milestone-list-container" style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-height: 0; overflow-y: auto;">
                                     ${this.renderMilestones()}
                                 </div>
                                 ${this.state.milestones.length > 0 ? html`
@@ -206,6 +206,13 @@ export class MediaDetail extends Component<MediaDetailState> {
 
         const logsContainer = detailView.querySelector('#media-logs-container') as HTMLElement;
         new MediaLog(logsContainer, logs).render();
+
+        logsContainer.addEventListener('activity-updated', async () => {
+            if (this.state.media.id) {
+                const updatedLogs = await getLogsForMedia(this.state.media.id);
+                this.setState({ logs: updatedLogs });
+            }
+        });
     }
 
     private placeMilestonesCard() {
@@ -215,7 +222,17 @@ export class MediaDetail extends Component<MediaDetailState> {
         if (!card || !leftSlot || !mainSlot) return;
 
         const useMainColumn = globalThis.matchMedia('(max-width: 1024px)').matches;
-        (useMainColumn ? mainSlot : leftSlot).appendChild(card);
+        const activeSlot = useMainColumn ? mainSlot : leftSlot;
+        const inactiveSlot = useMainColumn ? leftSlot : mainSlot;
+
+        activeSlot.appendChild(card);
+        activeSlot.style.display = 'flex';
+        activeSlot.style.flexDirection = 'column';
+        activeSlot.style.flex = '1';
+        activeSlot.style.minHeight = '0';
+
+        inactiveSlot.style.display = 'none';
+        inactiveSlot.style.flex = '';
     }
 
     private syncViewportLayout() {
@@ -225,35 +242,14 @@ export class MediaDetail extends Component<MediaDetailState> {
 
     private adjustDesktopCoverSize() {
         const coverEl = this.container.querySelector<HTMLElement>('#media-cover-img');
-        const coverColumn = this.container.querySelector<HTMLElement>('#media-cover-column');
-        const deleteBlock = this.container.querySelector<HTMLElement>('#media-delete-block');
-        const milestonesCard = this.container.querySelector<HTMLElement>('#media-milestones-card');
-        if (!coverEl || !coverColumn || !deleteBlock || !milestonesCard) return;
+        if (!coverEl) return;
 
         const isDesktop = globalThis.matchMedia('(min-width: 1025px)').matches;
-        if (!isDesktop) {
+        if (isDesktop) {
             coverEl.style.height = '';
-            coverEl.style.width = '';
-            coverEl.style.maxWidth = '';
-            coverEl.style.margin = '';
-            coverEl.style.aspectRatio = '';
-            return;
-        }
-
-        const deleteStyles = getComputedStyle(deleteBlock);
-        const milestoneStyles = getComputedStyle(milestonesCard);
-        const deleteOuter = deleteBlock.offsetHeight + Number.parseFloat(deleteStyles.marginTop || '0');
-        const milestoneOuter = milestonesCard.offsetHeight + Number.parseFloat(milestoneStyles.marginTop || '0');
-        const availableForCover = coverColumn.clientHeight - deleteOuter - milestoneOuter - 8;
-        if (availableForCover <= 0) return;
-
-        const currentCoverHeight = coverEl.getBoundingClientRect().height;
-        if (currentCoverHeight > availableForCover) {
-            coverEl.style.height = `${Math.floor(availableForCover)}px`;
-            coverEl.style.width = 'auto';
-            coverEl.style.maxWidth = '100%';
-            coverEl.style.margin = '0 auto';
+            coverEl.style.width = '100%';
             coverEl.style.aspectRatio = '2 / 3';
+            coverEl.style.objectFit = 'cover';
         } else {
             coverEl.style.height = '';
             coverEl.style.width = '';
@@ -271,10 +267,12 @@ export class MediaDetail extends Component<MediaDetailState> {
         return this.state.milestones.map(m => {
             const dateHover = m.date ? `title="Achieved on ${m.date}"` : '';
             return `
-                <div class="milestone-item" ${dateHover} style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.5rem; background: rgba(255,255,255,0.03); border-radius: 3px; border: 1px solid rgba(255,255,255,0.05); position: relative;">
+                <div class="milestone-item" data-milestone-name="${escapeHTML(m.name)}" ${dateHover} style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.5rem; background: rgba(255,255,255,0.03); border-radius: 3px; border: 1px solid rgba(255,255,255,0.05); position: relative;">
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 0.05rem;">
                         <span style="font-weight: 600; font-size: 0.8rem; line-height: 1.1;">${escapeHTML(m.name)}</span>
-                        <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">${formatHhMm(m.duration)}</span>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">
+                            ${m.duration > 0 ? formatHhMm(m.duration) : ''}${(m.duration > 0 && m.characters > 0) ? ' • ' : ''}${m.characters > 0 ? `${m.characters.toLocaleString()} chars` : ''}
+                        </span>
                     </div>
                     <button class="delete-milestone-btn" data-id="${m.id}" style="background: transparent; border: none; color: var(--accent-red); cursor: pointer; padding: 0.15rem; display: flex; align-items: center; justify-content: center; opacity: 0.4; transition: opacity 0.2s;">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
@@ -384,6 +382,7 @@ export class MediaDetail extends Component<MediaDetailState> {
         const lastLogDate = logs[0].date;
         const firstLogDate = logs[logs.length - 1].date;
         const totalMin = logs.reduce((acc, log) => acc + log.duration_minutes, 0);
+        const totalChars = logs.reduce((acc, log) => acc + log.characters, 0);
         const totalStr = formatHhMm(totalMin);
 
         let verb = "Logged";
@@ -399,7 +398,8 @@ export class MediaDetail extends Component<MediaDetailState> {
         statsDiv.innerHTML = `
             <span style="color: var(--text-secondary);">First ${verb}: <strong style="color: var(--text-primary);">${firstLogDate}</strong></span>
             <span style="color: var(--text-secondary);">Last ${verb}: <strong style="color: var(--text-primary);">${lastLogDate}</strong></span>
-            <span style="color: var(--text-secondary);">${totalLabel}: <strong style="color: var(--text-primary);">${totalStr}</strong></span>
+            ${totalMin > 0 ? `<span style="color: var(--text-secondary);">${totalLabel}: <strong style="color: var(--text-primary);">${totalStr}</strong></span>` : ''}
+            ${totalChars > 0 ? `<span style="color: var(--text-secondary);">Total Chars: <strong style="color: var(--text-primary);">${totalChars.toLocaleString()}</strong></span>` : ''}
             ${readingSpeedHtml}
         `;
     }

@@ -30,6 +30,7 @@ describe('modals/milestone.ts', () => {
             media_title: 'Test Media',
             name: 'Finish Chapter 1',
             duration: 150,
+            characters: 0,
             date: undefined
         });
     });
@@ -44,6 +45,7 @@ describe('modals/milestone.ts', () => {
         
         const nameInput = document.querySelector('#milestone-name') as HTMLInputElement;
         nameInput.value = 'Milestone with Date';
+        (document.querySelector('#milestone-minutes') as HTMLInputElement).value = '10';
         
         (document.querySelector('#milestone-confirm') as HTMLElement).click();
         
