@@ -25,7 +25,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
 
     render() {
         this.clear();
-        
+
         const chartsLayout = html`
             <div id="activity-charts-grid" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 2rem;">
                 <div class="card" style="display: flex; flex-direction: column; min-width: 0;">
@@ -100,7 +100,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
 
     private setupListeners(layout: HTMLElement) {
         layout.querySelector('#btn-chart-prev')?.addEventListener('click', () => {
-             this.onChartParamChange({ timeRangeOffset: this.state.timeRangeOffset + 1 });
+            this.onChartParamChange({ timeRangeOffset: this.state.timeRangeOffset + 1 });
         });
         layout.querySelector('#btn-chart-next')?.addEventListener('click', () => {
             if (this.state.timeRangeOffset > 0) {
@@ -136,7 +136,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
 
         const colors = this.getChartColors();
         const timeRange = this.calculateTimeRange();
-        
+
         this.createPieChart(pieCanvas, colors, timeRange);
         this.createBarChart(barCanvas, colors, timeRange);
     }
@@ -144,17 +144,17 @@ export class ActivityCharts extends Component<ActivityChartsState> {
     private getChartColors(): string[] {
         const style = getComputedStyle(document.body);
         return [
-          style.getPropertyValue('--chart-1').trim() || '#f4a6b8',
-          style.getPropertyValue('--chart-2').trim() || '#b8cdda',
-          style.getPropertyValue('--chart-3').trim() || '#e0bbe4',
-          style.getPropertyValue('--chart-4').trim() || '#957DAD',
-          style.getPropertyValue('--chart-5').trim() || '#D291BC'
+            style.getPropertyValue('--chart-1').trim() || '#f4a6b8',
+            style.getPropertyValue('--chart-2').trim() || '#b8cdda',
+            style.getPropertyValue('--chart-3').trim() || '#e0bbe4',
+            style.getPropertyValue('--chart-4').trim() || '#957DAD',
+            style.getPropertyValue('--chart-5').trim() || '#D291BC'
         ];
     }
 
     private calculateTimeRange() {
         const { timeRangeDays } = this.state;
-        
+
         switch (timeRangeDays) {
             case 7: return this.getWeeklyRange();
             case 30: return this.getMonthlyRange();
@@ -175,7 +175,7 @@ export class ActivityCharts extends Component<ActivityChartsState> {
         endDay.setDate(endDay.getDate() - (7 * timeRangeOffset));
         const dayOfWeek = endDay.getDay();
         const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-        
+
         const startDay = new Date(endDay);
         startDay.setDate(endDay.getDate() - diffToMonday);
         endDay.setDate(startDay.getDate() + 6);
@@ -199,12 +199,12 @@ export class ActivityCharts extends Component<ActivityChartsState> {
         const targetMonth = new Date(today.getFullYear(), today.getMonth() - timeRangeOffset, 1);
         const y = targetMonth.getFullYear();
         const m = targetMonth.getMonth();
-        
+
         const startDay = new Date(y, m, 1);
         const endDay = new Date(y, m + 1, 0);
         const validStart = this.getLocalISODate(startDay);
         const validEnd = this.getLocalISODate(endDay);
-        
+
         const weeksCount = Math.ceil(endDay.getDate() / 7);
         for (let i = 0; i < weeksCount; i++) labels.push(`Week ${i + 1}`);
 
@@ -251,12 +251,14 @@ export class ActivityCharts extends Component<ActivityChartsState> {
             }
         }
 
+        const sortedEntries = Array.from(pieTypeMap.entries()).sort((a, b) => b[1] - a[1]);
+
         this.pieChartInstance = new Chart(canvas, {
             type: 'doughnut',
             data: {
-                labels: Array.from(pieTypeMap.keys()),
+                labels: sortedEntries.map(e => e[0]),
                 datasets: [{
-                    data: Array.from(pieTypeMap.values()),
+                    data: sortedEntries.map(e => e[1]),
                     backgroundColor: colors,
                     borderWidth: 0
                 }]
@@ -271,9 +273,9 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                             label: (context) => {
                                 const val = context.parsed;
                                 if (this.state.metric === 'minutes') {
-                                    return `${context.dataset.label || context.label}: ${formatStatsDuration(val, true)}`;
+                                    return formatStatsDuration(val, true);
                                 }
-                                return `${context.dataset.label || context.label}: ${val.toLocaleString()} chars`;
+                                return `${val.toLocaleString()} chars`;
                             }
                         }
                     }
@@ -299,22 +301,22 @@ export class ActivityCharts extends Component<ActivityChartsState> {
                 maintainAspectRatio: false,
                 scales: {
                     x: { stacked: chartType === 'bar', grid: { color: '#3f3f4e' }, ticks: { color: '#a0a0b0' } },
-                    y: { 
-                        stacked: chartType === 'bar', 
-                        grid: { color: '#3f3f4e' }, 
-                        ticks: { 
+                    y: {
+                        stacked: chartType === 'bar',
+                        grid: { color: '#3f3f4e' },
+                        ticks: {
                             color: '#a0a0b0',
-                            callback: (value) => { 
+                            callback: (value) => {
                                 if (this.state.metric === 'minutes') {
                                     return formatStatsDuration(value as number, true);
                                 }
                                 return value.toLocaleString();
                             }
-                        } 
+                        }
                     }
                 },
                 plugins: {
-                    legend: { display: datasets.length <= 6, position: 'top', labels: { color: '#a0a0b0'} },
+                    legend: { display: datasets.length <= 6, position: 'top', labels: { color: '#a0a0b0' } },
                     tooltip: {
                         callbacks: {
                             label: (context) => {

@@ -371,7 +371,7 @@ pub fn get_logs(conn: &Connection) -> Result<Vec<ActivitySummary>> {
         "SELECT a.id, a.media_id, m.title, m.media_type, a.duration_minutes, a.characters, a.date, m.language 
          FROM main.activity_logs a 
          JOIN shared.media m ON a.media_id = m.id
-         ORDER BY a.date DESC",
+         ORDER BY a.date DESC, a.id DESC",
     )?;
     let logs_iter = stmt.query_map([], |row| {
         Ok(ActivitySummary {
@@ -399,7 +399,7 @@ pub fn get_logs_for_media(conn: &Connection, media_id: i64) -> Result<Vec<Activi
          FROM main.activity_logs a 
          JOIN shared.media m ON a.media_id = m.id
          WHERE a.media_id = ?1
-         ORDER BY a.date DESC",
+         ORDER BY a.date DESC, a.id DESC",
     )?;
     let logs_iter = stmt.query_map(params![media_id], |row| {
         Ok(ActivitySummary {
