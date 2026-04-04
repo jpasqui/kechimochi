@@ -4,6 +4,7 @@ import { customAlert, createOverlay } from './base';
 import { escapeHTML } from '../core/html';
 import { ACTIVITY_TYPES } from '../constants';
 import { getExtraDataValue } from '../utils/extra_data';
+import type { ScrapedFieldSource, ScrapedMetadata } from '../importers/index';
 
 export async function showAddMediaModal(): Promise<{title: string, type: string, contentType: string} | null> {
     return new Promise((resolve) => {
@@ -71,7 +72,7 @@ interface JitenImportResult {
     extraData: Record<string, string>;
 }
 
-export async function showImportMergeModal(scraped: import('../importers/index').ScrapedMetadata, currentData: { description?: string, coverImageUrl?: string, extraData: Record<string, string>, imagesIdentical?: boolean }): Promise<JitenImportResult | null> {
+export async function showImportMergeModal(scraped: ScrapedMetadata, currentData: { description?: string, coverImageUrl?: string, extraData: Record<string, string>, imagesIdentical?: boolean }): Promise<JitenImportResult | null> {
     const extraFields = buildExtraFieldsHtml(scraped, currentData);
     const descField = buildDescriptionHtml(scraped, currentData);
     const coverField = buildCoverHtml(scraped, currentData);
@@ -105,7 +106,13 @@ export async function showImportMergeModal(scraped: import('../importers/index')
     });
 }
 
-function buildExtraFieldsHtml(scraped: import('../importers/index').ScrapedMetadata, currentData: { extraData: Record<string, string> }) {
+function buildInheritedFieldHint(source?: ScrapedFieldSource): string {
+    return source === 'entireSeries'
+        ? `<span style="color: var(--text-secondary); font-size: 0.7rem; margin-left: 0.5rem;">(From Entire Series)</span>`
+        : '';
+}
+
+function buildExtraFieldsHtml(scraped: ScrapedMetadata, currentData: { extraData: Record<string, string> }) {
     let html = '';
     let count = 0;
     for (const [key, val] of Object.entries(scraped.extraData)) {
@@ -113,6 +120,7 @@ function buildExtraFieldsHtml(scraped: import('../importers/index').ScrapedMetad
         if (val === currentValue) continue;
         count++;
         const isOverwrite = currentValue !== undefined;
+        const sourceHint = buildInheritedFieldHint(scraped.fieldSources?.extraData?.[key]);
         const overwriteText = isOverwrite ? `<span style="color: var(--accent-red); font-size: 0.7rem; margin-left: 0.5rem;">(Overwrites existing)</span>` : `<span style="color: var(--accent-green); font-size: 0.7rem; margin-left: 0.5rem;">(New field)</span>`;
         const valHtml = isOverwrite ? `
             <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem;">
@@ -124,7 +132,7 @@ function buildExtraFieldsHtml(scraped: import('../importers/index').ScrapedMetad
         <label style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
             <input type="checkbox" class="import-checkbox" data-field="extra-${escapeHTML(key)}" checked />
             <div style="flex: 1; display: flex; flex-direction: column;">
-                <span style="font-size: 0.85rem; font-weight: 500;">${escapeHTML(key)} ${overwriteText}</span>
+                <span style="font-size: 0.85rem; font-weight: 500;">${escapeHTML(key)} ${sourceHint}${overwriteText}</span>
                 ${valHtml}
             </div>
         </label>`;
@@ -132,10 +140,11 @@ function buildExtraFieldsHtml(scraped: import('../importers/index').ScrapedMetad
     return { html, count };
 }
 
-function buildDescriptionHtml(scraped: import('../importers/index').ScrapedMetadata, currentData: { description?: string }) {
+function buildDescriptionHtml(scraped: ScrapedMetadata, currentData: { description?: string }) {
     const show = !!(scraped.description && scraped.description !== currentData.description);
     if (!show) return { html: '', show: false };
     const isOverwrite = !!currentData.description;
+    const sourceHint = buildInheritedFieldHint(scraped.fieldSources?.description);
     const overwriteText = isOverwrite ? `<span style="color: var(--accent-red); font-size: 0.7rem; margin-left: 0.5rem;">(Overwrites existing)</span>` : `<span style="color: var(--accent-green); font-size: 0.7rem; margin-left: 0.5rem;">(New field)</span>`;
     const innerHtml = isOverwrite ? `
         <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem;">
@@ -148,17 +157,18 @@ function buildDescriptionHtml(scraped: import('../importers/index').ScrapedMetad
         <label style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
             <input type="checkbox" class="import-checkbox" data-field="description" checked />
             <div style="flex: 1; display: flex; flex-direction: column;">
-                <span style="font-size: 0.85rem; font-weight: 500;">Description ${overwriteText}</span>
+                <span style="font-size: 0.85rem; font-weight: 500;">Description ${sourceHint}${overwriteText}</span>
                 ${innerHtml}
             </div>
         </label>`
     };
 }
 
-function buildCoverHtml(scraped: import('../importers/index').ScrapedMetadata, currentData: { coverImageUrl?: string, imagesIdentical?: boolean }) {
+function buildCoverHtml(scraped: ScrapedMetadata, currentData: { coverImageUrl?: string, imagesIdentical?: boolean }) {
     const show = !!(scraped.coverImageUrl && !currentData.imagesIdentical);
     if (!show) return { html: '', show: false };
     const isOverwrite = !!currentData.coverImageUrl;
+    const sourceHint = buildInheritedFieldHint(scraped.fieldSources?.coverImageUrl);
     const overwriteText = isOverwrite ? `<span style="color: var(--accent-red); font-size: 0.7rem; margin-left: 0.5rem;">(Overwrites existing)</span>` : `<span style="color: var(--accent-green); font-size: 0.7rem; margin-left: 0.5rem;">(New field)</span>`;
     const innerHtml = isOverwrite ? `
         <div style="display: flex; gap: 1rem; margin-top: 0.5rem; align-items: center;">
@@ -178,14 +188,14 @@ function buildCoverHtml(scraped: import('../importers/index').ScrapedMetadata, c
         <label style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
             <input type="checkbox" class="import-checkbox" data-field="cover" checked />
             <div style="flex: 1; display: flex; flex-direction: column;">
-                <span style="font-size: 0.85rem; font-weight: 500;">Cover Image ${overwriteText}</span>
+                <span style="font-size: 0.85rem; font-weight: 500;">Cover Image ${sourceHint}${overwriteText}</span>
                 ${innerHtml}
             </div>
         </label>`
     };
 }
 
-function processImportMerge(overlay: HTMLElement, scraped: import('../importers/index').ScrapedMetadata) {
+function processImportMerge(overlay: HTMLElement, scraped: ScrapedMetadata) {
     const result: JitenImportResult = { extraData: {} };
     overlay.querySelectorAll<HTMLInputElement>('.import-checkbox:checked').forEach((el) => {
         const field = el.dataset.field;

@@ -44,6 +44,98 @@ describe('JitenImporter', () => {
             expect(result.contentType).toBe('Novel');
         });
 
+        it('should prefer child fields and fall back to entire series fields when needed', async () => {
+            const childDeck = {
+                data: {
+                    mainDeck: {
+                        deckId: 456,
+                        parentDeckId: 123,
+                        originalTitle: 'Volume 1',
+                        description: '',
+                        characterCount: 1000,
+                        wordCount: null,
+                        uniqueKanjiCount: 220,
+                        difficultyRaw: -1,
+                        mediaType: 4,
+                        coverName: null,
+                    }
+                }
+            };
+            const parentDeck = {
+                data: {
+                    mainDeck: {
+                        deckId: 123,
+                        originalTitle: 'Series',
+                        description: 'Series Desc',
+                        characterCount: 9999,
+                        wordCount: 6000,
+                        uniqueKanjiCount: 800,
+                        difficultyRaw: 2.5,
+                        mediaType: 4,
+                        coverName: 'cover.jpg',
+                    }
+                }
+            };
+
+            vi.mocked(invoke)
+                .mockResolvedValueOnce(JSON.stringify(childDeck))
+                .mockResolvedValueOnce(JSON.stringify(parentDeck));
+
+            const result = await importer.fetch('https://jiten.moe/decks/456');
+
+            expect(result.description).toBe('Series Desc');
+            expect(result.coverImageUrl).toBe('https://cdn.jiten.moe/123/cover.jpg');
+            expect(result.extraData['Character count']).toBe('1,000');
+            expect(result.extraData['Word count']).toBe('6,000');
+            expect(result.extraData['Unique kanji']).toBe('220');
+            expect(result.extraData['Jiten difficulty']).toBe('2.50/5');
+            expect(result.fieldSources).toEqual({
+                description: 'entireSeries',
+                coverImageUrl: 'entireSeries',
+                extraData: {
+                    'Word count': 'entireSeries',
+                    'Jiten difficulty': 'entireSeries',
+                },
+            });
+        });
+
+        it('should still use the entire series cover for child decks even when the child exposes coverName', async () => {
+            const childDeck = {
+                data: {
+                    mainDeck: {
+                        deckId: 456,
+                        parentDeckId: 123,
+                        originalTitle: 'Volume 1',
+                        description: 'Volume Desc',
+                        characterCount: 1000,
+                        difficultyRaw: 2,
+                        mediaType: 4,
+                        coverName: 'volume-cover.jpg',
+                    }
+                }
+            };
+            const parentDeck = {
+                data: {
+                    mainDeck: {
+                        deckId: 123,
+                        originalTitle: 'Series',
+                        description: 'Series Desc',
+                        mediaType: 4,
+                        coverName: 'series-cover.jpg',
+                    }
+                }
+            };
+
+            vi.mocked(invoke)
+                .mockResolvedValueOnce(JSON.stringify(childDeck))
+                .mockResolvedValueOnce(JSON.stringify(parentDeck));
+
+            const result = await importer.fetch('https://jiten.moe/decks/456');
+
+            expect(result.coverImageUrl).toBe('https://cdn.jiten.moe/123/cover.jpg');
+            expect(result.fieldSources?.coverImageUrl).toBe('entireSeries');
+        });
+
         it('should throw error on invalid URL', async () => {
             await expect(importer.fetch('https://jiten.moe/invalid')).rejects.toThrow('Invalid Jiten.moe URL');
         });

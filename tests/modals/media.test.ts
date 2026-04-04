@@ -84,6 +84,36 @@ describe('modals/media.ts', () => {
             expect(result?.extraData['Genre']).toBe('Action');
             expect(result?.extraData['Author']).toBeUndefined();
         });
+
+        it('should label inherited Jiten fields as coming from the entire series', async () => {
+            const scraped = {
+                title: 'Volume 1',
+                description: 'Series Desc',
+                coverImageUrl: 'series-cover.jpg',
+                extraData: { 'Word count': '6,000', 'Character count': '1,000' },
+                fieldSources: {
+                    description: 'entireSeries',
+                    coverImageUrl: 'entireSeries',
+                    extraData: { 'Word count': 'entireSeries' }
+                }
+            };
+            const current = {
+                description: '',
+                extraData: {}
+            };
+
+            const promise = showImportMergeModal(scraped as unknown as ScrapedMetadata, current as unknown as { description?: string, coverImageUrl?: string, extraData: Record<string, string>, imagesIdentical?: boolean });
+            await vi.waitFor(() => document.querySelector('#import-confirm'));
+
+            const labels = Array.from(document.querySelectorAll('label')).map(node => node.textContent || '');
+            expect(labels.some(text => text.includes('Description') && text.includes('From Entire Series'))).toBe(true);
+            expect(labels.some(text => text.includes('Cover Image') && text.includes('From Entire Series'))).toBe(true);
+            expect(labels.some(text => text.includes('Word count') && text.includes('From Entire Series'))).toBe(true);
+            expect(labels.some(text => text.includes('Character count') && text.includes('From Entire Series'))).toBe(false);
+
+            (document.querySelector('#import-cancel') as HTMLElement).click();
+            await expect(promise).resolves.toBeNull();
+        });
     });
     describe('showMediaCsvConflictModal', () => {
         it('should resolve conflicting records', async () => {
