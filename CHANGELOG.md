@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, with one section per released version.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-04
+
 ### Added
  - Android apk is now built for published releases
 
