@@ -576,24 +576,25 @@ export class ProfileView extends Component<ProfileState> {
                     </div>
                 </div>
 
-                <div class="card" style="display: flex; flex-direction: column; gap: 1rem; border: 1px solid #ff4757;">
-                    <h3 style="color: #ff4757;">Danger Zone</h3>
+                <!-- Danger Zone -->
+                <div class="card" style="display: flex; flex-direction: column; gap: 1rem; border: 1px solid var(--accent-red);">
+                    <h3 style="color: var(--accent-red);">Danger Zone</h3>
 
                     <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem;">
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
                             <div>
-                                <strong style="color: #ff4757;">Clear User Activities</strong>
+                                <strong style="color: var(--accent-red);">Clear User Activities</strong>
                                 <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Removes all recorded activity logs, but keeps the profile and media library intact.</p>
                             </div>
-                            <button class="btn btn-danger" id="profile-btn-clear-activities" style="background-color: transparent !important; border: 1px solid #ff4757; color: #ff4757 !important; min-width: 140px;">Clear Activities</button>
+                            <button class="btn btn-danger" id="profile-btn-clear-activities" style="background-color: transparent !important; border: 1px solid var(--accent-red); color: var(--accent-red) !important; min-width: 140px;">Clear Activities</button>
                         </div>
 
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
                             <div>
-                                <strong style="color: #ff4757;">Delete Everything</strong>
+                                <strong style="color: var(--accent-red);">Delete Everything</strong>
                                 <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0;">Perform a total factory reset. Deletes ALL profiles, ALL activity logs, and the ENTIRE media library along with its cover images. Irreversible.</p>
                             </div>
-                            <button class="btn btn-danger" id="profile-btn-wipe-everything" style="background-color: darkred !important; color: #ffffff !important; border: none; min-width: 140px; font-weight: bold;">Factory Reset</button>
+                            <button class="btn btn-danger" id="profile-btn-wipe-everything" style="background-color: var(--accent-red) !important; color: var(--accent-text) !important; border: none; min-width: 140px; font-weight: bold;">Factory Reset</button>
                         </div>
                     </div>
                 </div>

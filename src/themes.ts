@@ -1,7 +1,6 @@
 import { Logger } from './core/logger';
 import { DEFAULTS, STORAGE_KEYS } from './constants';
 import {
-    THEME_VARIABLE_KEYS,
     type ThemePackV1,
     type ThemeVariableKey,
     type ThemeVariables,
@@ -15,23 +14,81 @@ const BUILTIN_EXPORT_PREFIX = 'custom:';
 type ThemeDefinition = ThemePackV1 & { builtIn: boolean };
 type ThemeOption = Pick<ThemeDefinition, 'id' | 'name' | 'builtIn'>;
 
-const DEFAULT_THEME_VARIABLES: Pick<
-    ThemeVariables,
-    'heatmap-hue' | 'heatmap-sat-base' | 'heatmap-sat-range' | 'heatmap-light-base' | 'heatmap-light-range' | 'accent-text'
-> = {
-    'heatmap-hue': '353',
-    'heatmap-sat-base': '30',
-    'heatmap-sat-range': '70',
-    'heatmap-light-base': '45',
-    'heatmap-light-range': '41',
-    'accent-text': '#ffffff',
+type ThemeVariableDescriptor = {
+    key: ThemeVariableKey;
+    cssVar: string;
 };
 
-function createThemeVariables(overrides: Omit<ThemeVariables, keyof typeof DEFAULT_THEME_VARIABLES> & Partial<typeof DEFAULT_THEME_VARIABLES>): ThemeVariables {
-    return {
-        ...DEFAULT_THEME_VARIABLES,
-        ...overrides,
-    };
+type BuiltInThemeCssVariables = Record<ThemeVariableDescriptor['cssVar'], string>;
+
+const THEME_VARIABLE_DESCRIPTORS: readonly ThemeVariableDescriptor[] = [
+    { key: 'surface-base', cssVar: 'bg-dark' },
+    { key: 'surface-card', cssVar: 'bg-card' },
+    { key: 'surface-card-hover', cssVar: 'bg-card-hover' },
+    { key: 'text-primary', cssVar: 'text-primary' },
+    { key: 'text-secondary', cssVar: 'text-secondary' },
+    { key: 'accent-primary', cssVar: 'accent-green' },
+    { key: 'accent-primary-hover', cssVar: 'accent-green-hover' },
+    { key: 'accent-danger', cssVar: 'accent-red' },
+    { key: 'accent-interactive', cssVar: 'accent-blue' },
+    { key: 'accent-highlight', cssVar: 'accent-yellow' },
+    { key: 'accent-secondary', cssVar: 'accent-purple' },
+    { key: 'border-subtle', cssVar: 'border-color' },
+    { key: 'shadow-soft', cssVar: 'shadow-sm' },
+    { key: 'shadow-strong', cssVar: 'shadow-md' },
+    { key: 'heatmap-hue', cssVar: 'heatmap-hue' },
+    { key: 'heatmap-saturation-base', cssVar: 'heatmap-sat-base' },
+    { key: 'heatmap-saturation-range', cssVar: 'heatmap-sat-range' },
+    { key: 'heatmap-lightness-base', cssVar: 'heatmap-light-base' },
+    { key: 'heatmap-lightness-range', cssVar: 'heatmap-light-range' },
+    { key: 'accent-contrast', cssVar: 'accent-text' },
+    { key: 'chart-series-1', cssVar: 'chart-1' },
+    { key: 'chart-series-2', cssVar: 'chart-2' },
+    { key: 'chart-series-3', cssVar: 'chart-3' },
+    { key: 'chart-series-4', cssVar: 'chart-4' },
+    { key: 'chart-series-5', cssVar: 'chart-5' },
+] as const;
+
+const DEFAULT_THEME_VARIABLES: Pick<
+    ThemeVariables,
+    'heatmap-hue' | 'heatmap-saturation-base' | 'heatmap-saturation-range' | 'heatmap-lightness-base' | 'heatmap-lightness-range' | 'accent-contrast'
+> = {
+    'heatmap-hue': '353',
+    'heatmap-saturation-base': '30',
+    'heatmap-saturation-range': '70',
+    'heatmap-lightness-base': '45',
+    'heatmap-lightness-range': '41',
+    'accent-contrast': '#ffffff',
+};
+
+function normalizeThemeVariables(input: Record<string, unknown>, sourceLabel: string): ThemeVariables {
+    const variables = {} as ThemeVariables;
+
+    for (const descriptor of THEME_VARIABLE_DESCRIPTORS) {
+        const value = input[descriptor.key];
+
+        if (typeof value !== 'string' || value.trim().length === 0) {
+            throw new Error(`${sourceLabel} variable "${descriptor.key}" must be a non-empty string.`);
+        }
+
+        variables[descriptor.key] = value.trim();
+    }
+
+    return variables;
+}
+
+function createThemeVariables(overrides: Partial<ThemeVariables>): ThemeVariables {
+    return normalizeThemeVariables({ ...DEFAULT_THEME_VARIABLES, ...overrides }, 'Built-in theme');
+}
+
+function createThemeVariablesFromCssVariables(overrides: BuiltInThemeCssVariables): ThemeVariables {
+    const normalizedOverrides = Object.fromEntries(
+        THEME_VARIABLE_DESCRIPTORS
+            .map(descriptor => [descriptor.key, overrides[descriptor.cssVar]])
+            .filter(([, value]) => value !== undefined),
+    ) as Partial<ThemeVariables>;
+
+    return createThemeVariables(normalizedOverrides);
 }
 
 export const BUILTIN_THEMES: ThemeDefinition[] = [
@@ -40,7 +97,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'pastel-pink',
         name: 'Pastel Pink (Default)',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#2e232b',
             'bg-card': '#3d2e37',
             'bg-card-hover': '#4f3b47',
@@ -71,7 +128,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'light',
         name: 'Light Theme',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#f8f9fa',
             'bg-card': '#ffffff',
             'bg-card-hover': '#f1f3f5',
@@ -102,7 +159,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'dark',
         name: 'Dark Theme',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#121212',
             'bg-card': '#1e1e1e',
             'bg-card-hover': '#2d2d2d',
@@ -133,7 +190,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'light-greyscale',
         name: 'Light Greyscale',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#ffffff',
             'bg-card': '#f5f5f5',
             'bg-card-hover': '#e0e0e0',
@@ -166,7 +223,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'dark-greyscale',
         name: 'Dark Greyscale',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#000000',
             'bg-card': '#121212',
             'bg-card-hover': '#1e1e1e',
@@ -199,7 +256,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'molokai',
         name: 'Molokai',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#1b1d1e',
             'bg-card': '#232526',
             'bg-card-hover': '#3e3d32',
@@ -230,7 +287,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'green-olive',
         name: 'Green Olive',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#232d20',
             'bg-card': '#2d3a2a',
             'bg-card-hover': '#3d4d38',
@@ -258,7 +315,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'deep-blue',
         name: 'Deep Blue',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#0a192f',
             'bg-card': '#112240',
             'bg-card-hover': '#233554',
@@ -286,7 +343,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'purple',
         name: 'Purple',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#1e1b2e',
             'bg-card': '#2e2a44',
             'bg-card-hover': '#3f3a5c',
@@ -314,7 +371,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'fire-red',
         name: 'Fire Red',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#2b1111',
             'bg-card': '#3d1a1a',
             'bg-card-hover': '#542525',
@@ -342,7 +399,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'yellow-lime',
         name: 'Yellow Lime',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#2a2b10',
             'bg-card': '#3a3b1a',
             'bg-card-hover': '#4a4b2a',
@@ -370,7 +427,7 @@ export const BUILTIN_THEMES: ThemeDefinition[] = [
         id: 'noctua-brown',
         name: 'Noctua Brown',
         builtIn: true,
-        variables: createThemeVariables({
+        variables: createThemeVariablesFromCssVariables({
             'bg-dark': '#3c2e28',
             'bg-card': '#4d3c33',
             'bg-card-hover': '#634d42',
@@ -647,16 +704,7 @@ function validateVariables(input: unknown): ThemeVariables {
         throw new Error('Theme pack variables must be an object.');
     }
 
-    const variables = {} as ThemeVariables;
-    for (const key of THEME_VARIABLE_KEYS) {
-        const value = input[key];
-        if (typeof value !== 'string' || value.trim().length === 0) {
-            throw new Error(`Theme pack variable "${key}" must be a non-empty string.`);
-        }
-        variables[key] = value.trim();
-    }
-
-    return variables;
+    return normalizeThemeVariables(input, 'Theme pack');
 }
 
 export function validateThemePack(raw: unknown): ThemePackV1 {
@@ -781,8 +829,8 @@ export function removeCustomTheme(existingThemes: ThemePackV1[], themeId: string
 }
 
 function buildVariableCss(theme: ThemePackV1): string {
-    const declarations = THEME_VARIABLE_KEYS
-        .map((key: ThemeVariableKey) => `  --${key}: ${theme.variables[key]};`)
+    const declarations = THEME_VARIABLE_DESCRIPTORS
+        .map((descriptor: ThemeVariableDescriptor) => `  --${descriptor.cssVar}: ${theme.variables[descriptor.key]};`)
         .join('\n');
     return `${selectorScope(theme.id)} {\n${declarations}\n}\n`;
 }
