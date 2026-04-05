@@ -523,6 +523,7 @@ async fn attach_remote_sync_profile_with_client<T: DriveTransport>(
     }
 
     apply_snapshot_and_materialize_with_client(
+        app_dir,
         conn,
         app_dir.join("covers").as_path(),
         &merge_outcome.merged_snapshot,
@@ -653,6 +654,11 @@ fn is_pristine_attach_shell(snapshot: &SyncSnapshot) -> bool {
     snapshot.profile.profile_name == "default"
         && snapshot.library.is_empty()
         && snapshot.settings.is_empty()
+        && snapshot
+            .theme_packs
+            .as_ref()
+            .map(|theme_packs| theme_packs.is_empty())
+            .unwrap_or(true)
         && snapshot.profile_picture.is_none()
         && snapshot.tombstones.is_empty()
 }
@@ -855,6 +861,7 @@ async fn run_sync_inner<T: DriveTransport>(
 
     if !merge_outcome.conflicts.is_empty() {
         apply_snapshot_and_materialize_with_client(
+            app_dir,
             conn,
             app_dir.join("covers").as_path(),
             &merge_outcome.merged_snapshot,
@@ -892,6 +899,7 @@ async fn run_sync_inner<T: DriveTransport>(
     }
 
     apply_snapshot_and_materialize_with_client(
+        app_dir,
         conn,
         app_dir.join("covers").as_path(),
         &merge_outcome.merged_snapshot,
@@ -963,6 +971,7 @@ async fn replace_local_from_remote_inner<T: DriveTransport>(
         );
 
         apply_snapshot_and_materialize_with_client(
+            app_dir,
             conn,
             app_dir.join("covers").as_path(),
             &remote_snapshot,
@@ -1148,6 +1157,7 @@ async fn resolve_sync_conflict_with_client<T: DriveTransport>(
 
     apply_conflict_resolution_to_snapshot(&mut local_snapshot, &conflict, &resolution)?;
     apply_snapshot_and_materialize_with_client(
+        app_dir,
         conn,
         app_dir.join("covers").as_path(),
         &local_snapshot,
@@ -1371,6 +1381,7 @@ fn build_local_snapshot_with_progress(
         sync_snapshot::build_snapshot_with_progress(
             &conn_guard,
             SnapshotBuildOptions {
+                app_dir: Some(app_dir),
                 snapshot_id: &snapshot_id,
                 created_at: &created_at,
                 created_by_device_id: &device_id,
@@ -1458,6 +1469,7 @@ fn snapshots_logically_equal(left: &SyncSnapshot, right: &SyncSnapshot) -> bool 
         && left.profile == right.profile
         && left.library == right.library
         && left.settings == right.settings
+    && left.theme_packs == right.theme_packs
         && left.profile_picture == right.profile_picture
         && left.tombstones == right.tombstones
 }
@@ -1875,6 +1887,7 @@ async fn upload_cover_blob_with_retry<T: DriveTransport>(
 }
 
 async fn apply_snapshot_and_materialize_with_client<T: DriveTransport>(
+    app_dir: &Path,
     conn: &Arc<Mutex<Connection>>,
     covers_dir: &Path,
     snapshot: &SyncSnapshot,
@@ -1895,6 +1908,7 @@ async fn apply_snapshot_and_materialize_with_client<T: DriveTransport>(
         let conn_guard = conn.lock().map_err(|e| e.to_string())?;
         sync_snapshot::apply_snapshot(&conn_guard, snapshot)?;
     }
+    sync_snapshot::apply_snapshot_theme_packs(app_dir, snapshot)?;
 
     materialize_snapshot_cover_blobs_with_client(
         conn,
@@ -2746,6 +2760,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn attach_remote_sync_profile_downloads_managed_custom_theme_packs() {
+        let (source_dir, source_conn) = setup_app();
+        let transport = MemoryDriveTransport::new();
+        let client = build_client(transport);
+        let token_store = test_token_store();
+
+        let theme_content = r#"{"version":1,"id":"custom:aurora-sync","name":"Aurora Sync","variables":{}}"#;
+        crate::save_theme_pack_logic(
+            &crate::theme_packs_dir(source_dir.path()),
+            "custom:aurora-sync",
+            theme_content,
+            Some("aurora-sync.json"),
+        )
+        .unwrap();
+
+        {
+            let conn_guard = source_conn.lock().unwrap();
+            db::set_setting(&conn_guard, "theme", "custom:aurora-sync").unwrap();
+        }
+
+        create_remote_sync_profile_with_client(
+            source_dir.path(),
+            &source_conn,
+            &client,
+            &token_store,
+            Some("Source".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let source_config = sync_state::load_sync_config(source_dir.path())
+            .unwrap()
+            .unwrap();
+
+        let target_dir = TempDir::new().unwrap();
+        let target_conn = Arc::new(Mutex::new(
+            db::init_db(target_dir.path().to_path_buf(), None).unwrap(),
+        ));
+
+        attach_remote_sync_profile_with_client(
+            target_dir.path(),
+            &target_conn,
+            &client,
+            &token_store,
+            &source_config.sync_profile_id,
+            Some("Target".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let synced_theme = {
+            let conn_guard = target_conn.lock().unwrap();
+            db::get_setting(&conn_guard, "theme").unwrap()
+        };
+        assert_eq!(synced_theme.as_deref(), Some("custom:aurora-sync"));
+        assert_eq!(
+            crate::read_theme_pack_logic(&crate::theme_packs_dir(target_dir.path()), "custom:aurora-sync").unwrap(),
+            Some(theme_content.to_string())
+        );
+    }
+
+    #[tokio::test]
     async fn materialize_snapshot_cover_blobs_lists_remote_blob_inventory_once() {
         let (temp_dir, conn) = setup_app();
         let transport = MemoryDriveTransport::new();
@@ -3276,6 +3354,7 @@ mod tests {
                 },
             )]),
             settings: BTreeMap::new(),
+            theme_packs: Some(BTreeMap::new()),
             profile_picture: None,
             tombstones: vec![],
         };

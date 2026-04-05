@@ -150,18 +150,23 @@ function formatSyncStatusLabel(syncStatus: SyncStatus): string {
     return formatSyncStateLabel(syncStatus.state);
 }
 
+const SYNC_WARNING_BORDER = 'color-mix(in srgb, var(--accent-yellow) 35%, transparent)';
+const SYNC_WARNING_BACKGROUND = 'color-mix(in srgb, var(--accent-yellow) 8%, transparent)';
+const SYNC_ERROR_BORDER = 'color-mix(in srgb, var(--accent-red) 35%, transparent)';
+const SYNC_ERROR_BACKGROUND = 'color-mix(in srgb, var(--accent-red) 8%, transparent)';
+
 function syncStateColor(state: SyncConnectionState): string {
     switch (state) {
         case 'connected_clean':
-            return '#2ed573';
+            return 'var(--accent-green)';
         case 'dirty':
-            return '#f59e0b';
+            return 'var(--accent-yellow)';
         case 'syncing':
             return 'var(--accent-blue)';
         case 'conflict_pending':
-            return '#ff7f50';
+            return 'var(--accent-yellow)';
         case 'error':
-            return '#ff4757';
+            return 'var(--accent-red)';
         case 'disconnected':
         default:
             return 'var(--text-secondary)';
@@ -170,7 +175,7 @@ function syncStateColor(state: SyncConnectionState): string {
 
 function syncStatusColor(syncStatus: SyncStatus): string {
     if (syncStatus.sync_profile_id && !syncStatus.google_authenticated) {
-        return '#ff4757';
+        return 'var(--accent-red)';
     }
     return syncStateColor(syncStatus.state);
 }
@@ -206,10 +211,10 @@ function profilePictureLabel(picture: SyncConflictProfilePicture | null): string
 
 function syncCardBorderColor(state: SyncConnectionState): string {
     if (state === 'error') {
-        return 'rgba(255, 71, 87, 0.25)';
+        return SYNC_ERROR_BORDER;
     }
     if (state === 'conflict_pending') {
-        return 'rgba(255, 127, 80, 0.25)';
+        return SYNC_WARNING_BORDER;
     }
     return 'var(--border-color)';
 }
@@ -752,10 +757,10 @@ export class ProfileView extends Component<ProfileState> {
 
     private renderSyncUnavailableCard(message: string) {
         return html`
-            <div class="card" id="profile-sync-card" style="display: flex; flex-direction: column; gap: 1rem; border: 1px solid rgba(255, 71, 87, 0.25);">
+            <div class="card" id="profile-sync-card" style="display: flex; flex-direction: column; gap: 1rem; border: 1px solid ${SYNC_ERROR_BORDER};">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <h3 style="margin: 0;">Cloud Sync</h3>
-                    <span style="font-size: 0.8rem; color: #ff4757; border: 1px solid rgba(255, 71, 87, 0.35); border-radius: 999px; padding: 0.2rem 0.65rem;">Unavailable</span>
+                    <span style="font-size: 0.8rem; color: var(--accent-red); border: 1px solid ${SYNC_ERROR_BORDER}; border-radius: 999px; padding: 0.2rem 0.65rem;">Unavailable</span>
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">${message}</p>
                 <div style="display: flex; justify-content: flex-end;">
@@ -797,7 +802,7 @@ export class ProfileView extends Component<ProfileState> {
 
                 ${this.state.syncError
                     ? html`
-                        <div style="padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid rgba(255, 71, 87, 0.35); background: rgba(255, 71, 87, 0.08); color: var(--text-primary);">
+                        <div style="padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid ${SYNC_ERROR_BORDER}; background: ${SYNC_ERROR_BACKGROUND}; color: var(--text-primary);">
                             ${this.state.syncError}
                         </div>
                     `
@@ -824,7 +829,7 @@ export class ProfileView extends Component<ProfileState> {
         const chips: HTMLElement[] = [];
         if (hasConflicts) {
             chips.push(html`
-                <span style="font-size: 0.76rem; color: var(--text-primary); border: 1px solid rgba(255, 127, 80, 0.35); border-radius: 999px; padding: 0.22rem 0.65rem; background: rgba(255, 127, 80, 0.08);">
+                <span style="font-size: 0.76rem; color: var(--text-primary); border: 1px solid ${SYNC_WARNING_BORDER}; border-radius: 999px; padding: 0.22rem 0.65rem; background: ${SYNC_WARNING_BACKGROUND};">
                     ${syncStatus.conflict_count} pending conflict${syncStatus.conflict_count === 1 ? '' : 's'}
                 </span>
             `);
@@ -906,7 +911,7 @@ export class ProfileView extends Component<ProfileState> {
                 </button>
                 ${this.state.showSyncRecoveryTools
                     ? html`
-                        <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid rgba(255, 71, 87, 0.28); background: rgba(255, 71, 87, 0.06);">
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid ${SYNC_ERROR_BORDER}; background: ${SYNC_ERROR_BACKGROUND};">
                             <span style="color: var(--text-secondary); font-size: 0.85rem;">
                                 These actions are destructive. ${hint}
                             </span>
@@ -1022,7 +1027,7 @@ export class ProfileView extends Component<ProfileState> {
             : conflict.media_uid;
 
         return html`
-            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid rgba(255, 127, 80, 0.24); border-radius: var(--radius-md); background: rgba(255, 127, 80, 0.05);">
+            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid ${SYNC_WARNING_BORDER}; border-radius: var(--radius-md); background: ${SYNC_WARNING_BACKGROUND};">
                 <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <strong>${formatFieldLabel(conflict.field_name)} conflict</strong>
@@ -1046,7 +1051,7 @@ export class ProfileView extends Component<ProfileState> {
         const remoteLabel = conflict.remote_value === null ? 'Discard entry' : 'Use Remote Entry';
 
         return html`
-            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid rgba(255, 127, 80, 0.24); border-radius: var(--radius-md); background: rgba(255, 127, 80, 0.05);">
+            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid ${SYNC_WARNING_BORDER}; border-radius: var(--radius-md); background: ${SYNC_WARNING_BACKGROUND};">
                 <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <strong>Extra data entry conflict</strong>
@@ -1074,7 +1079,7 @@ export class ProfileView extends Component<ProfileState> {
                 : conflict.local_media?.title || conflict.media_uid;
 
         return html`
-            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid rgba(255, 127, 80, 0.24); border-radius: var(--radius-md); background: rgba(255, 127, 80, 0.05);">
+            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid ${SYNC_WARNING_BORDER}; border-radius: var(--radius-md); background: ${SYNC_WARNING_BACKGROUND};">
                 <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <strong>Delete vs update conflict</strong>
@@ -1097,7 +1102,7 @@ export class ProfileView extends Component<ProfileState> {
 
     private renderProfilePictureConflict(conflict: Extract<SyncConflict, { kind: 'profile_picture_conflict' }>, index: number) {
         return html`
-            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid rgba(255, 127, 80, 0.24); border-radius: var(--radius-md); background: rgba(255, 127, 80, 0.05);">
+            <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; border: 1px solid ${SYNC_WARNING_BORDER}; border-radius: var(--radius-md); background: ${SYNC_WARNING_BACKGROUND};">
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                     <strong>Profile picture conflict</strong>
                     <span style="color: var(--text-secondary); font-size: 0.85rem;">Choose which picture should become the synced version.</span>

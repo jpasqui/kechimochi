@@ -201,7 +201,7 @@ export class MediaDetail extends Component<MediaDetailState> {
                                     <button
                                         type="button"
                                         id="btn-delete-media-detail"
-                                        style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.7rem; border: none; border-radius: 9px; background: transparent; color: #ff7582; font: inherit; font-size: 0.9rem; text-align: left; cursor: pointer;"
+                                        style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.7rem; border: none; border-radius: 9px; background: transparent; color: var(--accent-red); font: inherit; font-size: 0.9rem; text-align: left; cursor: pointer;"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                                         Delete media
