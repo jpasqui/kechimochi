@@ -1,14 +1,27 @@
 import { Logger } from './core/logger';
 import { DEFAULTS, STORAGE_KEYS } from './constants';
 import {
+    type ThemeBackgroundDefinition,
+    type ThemeFontDefinition,
     type ThemePackV1,
     type ThemeVariableKey,
     type ThemeVariables,
+    type ThemeTypographyDefinition,
 } from './types';
 
-export type { ThemePackV1, ThemeVariables, ThemeVariableKey } from './types';
+export type {
+    ThemeBackgroundDefinition,
+    ThemeFontDefinition,
+    ThemePackV1,
+    ThemeTypographyDefinition,
+    ThemeVariables,
+    ThemeVariableKey,
+} from './types';
 
 const CUSTOM_THEME_STYLE_ID = 'kechimochi-custom-theme-styles';
+const CUSTOM_THEME_BACKDROP_ID = 'kechimochi-custom-theme-backdrop';
+const THEME_BACKDROP_MANAGED_APP_POSITION = 'themeBackdropManagedAppPosition';
+const THEME_BACKDROP_MANAGED_APP_Z_INDEX = 'themeBackdropManagedAppZIndex';
 const BUILTIN_EXPORT_PREFIX = 'custom:';
 
 type ThemeDefinition = ThemePackV1 & { builtIn: boolean };
@@ -466,8 +479,165 @@ const UNSAFE_CSS_PATTERNS = [
     /-moz-binding/i,
 ];
 
+export type ThemeAssetResolver = (themeId: string, assetPath: string) => Promise<string | null>;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function normalizeThemeAssetReference(value: string): string {
+    return value.trim().replace(/\\/g, '/');
+}
+
+function isAbsoluteThemeAssetReference(value: string): boolean {
+    return /^(?:[a-z][a-z0-9+.-]*:|\/|data:|blob:)/i.test(value);
+}
+
+function isSafeRelativeThemeAssetPath(value: string): boolean {
+    if (value.length === 0) return false;
+    if (value.startsWith('/')) return false;
+    if (/^[A-Za-z]:\//.test(value)) return false;
+    const segments = value.split('/');
+    return segments.every(segment => segment !== '..' && segment.trim().length > 0);
+}
+
+function validateThemeAssetReference(value: unknown, label: string): string {
+    if (!isNonEmptyString(value)) {
+        throw new Error(`${label} must be a non-empty string.`);
+    }
+
+    const normalized = normalizeThemeAssetReference(value);
+    if (!isAbsoluteThemeAssetReference(normalized) && !isSafeRelativeThemeAssetPath(normalized)) {
+        throw new Error(`${label} must be an absolute URL/data URI or a safe relative asset path.`);
+    }
+
+    return normalized;
+}
+
+function validateThemeBackground(input: unknown): ThemeBackgroundDefinition | undefined {
+    if (input === undefined) return undefined;
+    if (!isRecord(input)) {
+        throw new Error('Theme pack background must be an object.');
+    }
+
+    const type = input.type;
+    if (type !== 'image' && type !== 'video') {
+        throw new Error('Theme pack background type must be "image" or "video".');
+    }
+
+    const fit = input.fit;
+    if (fit !== undefined && fit !== 'cover' && fit !== 'contain' && fit !== 'fill') {
+        throw new Error('Theme pack background fit must be "cover", "contain", or "fill".');
+    }
+
+    if (input.opacity !== undefined && !isFiniteNumber(input.opacity)) {
+        throw new Error('Theme pack background opacity must be a finite number.');
+    }
+    if (input.blur_px !== undefined && !isFiniteNumber(input.blur_px)) {
+        throw new Error('Theme pack background blur_px must be a finite number.');
+    }
+    if (input.playback_rate !== undefined && !isFiniteNumber(input.playback_rate)) {
+        throw new Error('Theme pack background playback_rate must be a finite number.');
+    }
+    if (input.loop !== undefined && typeof input.loop !== 'boolean') {
+        throw new Error('Theme pack background loop must be a boolean.');
+    }
+    if (input.muted !== undefined && typeof input.muted !== 'boolean') {
+        throw new Error('Theme pack background muted must be a boolean.');
+    }
+
+    const background: ThemeBackgroundDefinition = {
+        type,
+        src: validateThemeAssetReference(input.src, 'Theme pack background src'),
+    };
+
+    if (isNonEmptyString(input.poster)) {
+        background.poster = validateThemeAssetReference(input.poster, 'Theme pack background poster');
+    }
+    if (fit !== undefined) {
+        background.fit = fit;
+    }
+    if (input.opacity !== undefined) {
+        background.opacity = Math.min(1, Math.max(0, input.opacity));
+    }
+    if (input.blur_px !== undefined) {
+        background.blur_px = Math.max(0, input.blur_px);
+    }
+    if (input.playback_rate !== undefined) {
+        background.playback_rate = Math.max(0.1, input.playback_rate);
+    }
+    if (input.loop !== undefined) {
+        background.loop = input.loop;
+    }
+    if (input.muted !== undefined) {
+        background.muted = input.muted;
+    }
+
+    return background;
+}
+
+function validateThemeFonts(input: unknown): ThemeFontDefinition[] | undefined {
+    if (input === undefined) return undefined;
+    if (!Array.isArray(input)) {
+        throw new Error('Theme pack fonts must be an array.');
+    }
+
+    return input.map((entry, index) => {
+        if (!isRecord(entry)) {
+            throw new Error(`Theme pack font ${index + 1} must be an object.`);
+        }
+
+        const family = typeof entry.family === 'string' ? entry.family.trim() : '';
+        if (!family) {
+            throw new Error(`Theme pack font ${index + 1} family is required.`);
+        }
+
+        const format = entry.format;
+        if (format !== undefined && format !== 'woff2' && format !== 'woff' && format !== 'truetype' && format !== 'opentype') {
+            throw new Error(`Theme pack font ${index + 1} format is unsupported.`);
+        }
+
+        const style = entry.style;
+        if (style !== undefined && style !== 'normal' && style !== 'italic' && style !== 'oblique') {
+            throw new Error(`Theme pack font ${index + 1} style is unsupported.`);
+        }
+
+        return {
+            family,
+            src: validateThemeAssetReference(entry.src, `Theme pack font ${index + 1} src`),
+            weight: isNonEmptyString(entry.weight) ? entry.weight.trim() : undefined,
+            style,
+            format,
+        } satisfies ThemeFontDefinition;
+    });
+}
+
+function validateThemeTypography(input: unknown): ThemeTypographyDefinition | undefined {
+    if (input === undefined) return undefined;
+    if (!isRecord(input)) {
+        throw new Error('Theme pack typography must be an object.');
+    }
+
+    const typography: ThemeTypographyDefinition = {};
+    if (isNonEmptyString(input.body_family)) {
+        typography.body_family = input.body_family.trim();
+    }
+    if (isNonEmptyString(input.heading_family)) {
+        typography.heading_family = input.heading_family.trim();
+    }
+    if (isNonEmptyString(input.monospace_family)) {
+        typography.monospace_family = input.monospace_family.trim();
+    }
+
+    return Object.keys(typography).length > 0 ? typography : undefined;
 }
 
 function slugifyThemeName(name: string): string {
@@ -730,12 +900,18 @@ export function validateThemePack(raw: unknown): ThemePackV1 {
         throw new Error('Theme pack name is required.');
     }
 
+    const background = validateThemeBackground(raw.background);
+    const fonts = validateThemeFonts(raw.fonts);
+    const typography = validateThemeTypography(raw.typography);
     return {
-        version: 1,
+        version,
         id,
         name,
         variables: validateVariables(raw.variables),
         cssOverrides: validateCssOverrides(typeof raw.cssOverrides === 'string' ? raw.cssOverrides : undefined, id),
+        background,
+        fonts,
+        typography,
     };
 }
 
@@ -828,6 +1004,31 @@ export function removeCustomTheme(existingThemes: ThemePackV1[], themeId: string
     return existingThemes.filter(theme => theme.id !== themeId);
 }
 
+function escapeCssString(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function escapeCssUrl(value: string): string {
+    return value.replace(/\\/g, '/').replace(/'/g, "\\'");
+}
+
+function buildFontFaceCss(theme: ThemePackV1): string {
+    if (!theme.fonts || theme.fonts.length === 0) return '';
+
+    return theme.fonts.map(font => {
+        const formatPart = font.format ? ` format('${escapeCssString(font.format)}')` : '';
+        return [
+            '@font-face {',
+            `  font-family: '${escapeCssString(font.family)}';`,
+            `  src: url('${escapeCssUrl(font.src)}')${formatPart};`,
+            `  font-weight: ${font.weight || 'normal'};`,
+            `  font-style: ${font.style || 'normal'};`,
+            '  font-display: swap;',
+            '}',
+        ].join('\n');
+    }).join('\n');
+}
+
 function buildVariableCss(theme: ThemePackV1): string {
     const declarations = THEME_VARIABLE_DESCRIPTORS
         .map((descriptor: ThemeVariableDescriptor) => `  --${descriptor.cssVar}: ${theme.variables[descriptor.key]};`)
@@ -835,14 +1036,75 @@ function buildVariableCss(theme: ThemePackV1): string {
     return `${selectorScope(theme.id)} {\n${declarations}\n}\n`;
 }
 
+function buildTypographyCss(theme: ThemePackV1): string {
+    if (!theme.typography) return '';
+
+    const scope = selectorScope(theme.id);
+    const cssParts: string[] = [];
+
+    if (theme.typography.body_family) {
+        cssParts.push(`${scope}{font-family:${theme.typography.body_family};}`);
+    }
+    if (theme.typography.heading_family) {
+        cssParts.push(`${scope} h1,${scope} h2,${scope} h3,${scope} h4,${scope} h5,${scope} h6{font-family:${theme.typography.heading_family};}`);
+    }
+    if (theme.typography.monospace_family) {
+        cssParts.push(`${scope} code,${scope} pre,${scope} kbd,${scope} samp{font-family:${theme.typography.monospace_family};}`);
+    }
+
+    return cssParts.join('\n');
+}
+
 export function buildCustomThemeStyles(themes: ThemePackV1[]): string {
     return themes.map(theme => {
-        const cssParts = [buildVariableCss(theme)];
+        const cssParts = [buildFontFaceCss(theme), buildVariableCss(theme), buildTypographyCss(theme)].filter(Boolean);
         if (theme.cssOverrides) {
             cssParts.push(scopeCssOverrides(theme.cssOverrides, theme.id));
         }
         return cssParts.join('\n');
     }).join('\n');
+}
+
+function shouldResolveThemeAssetReference(value: string): boolean {
+    return !isAbsoluteThemeAssetReference(value);
+}
+
+async function resolveThemeAssetReference(themeId: string, value: string, resolver?: ThemeAssetResolver): Promise<string> {
+    if (!resolver || !shouldResolveThemeAssetReference(value)) {
+        return value;
+    }
+
+    const resolved = await resolver(themeId, value);
+    return resolved || value;
+}
+
+export async function resolveThemePackAssets(theme: ThemePackV1, resolver?: ThemeAssetResolver): Promise<ThemePackV1> {
+    if (!resolver) {
+        return theme;
+    }
+
+    const resolvedBackground = theme.background
+        ? {
+            ...theme.background,
+            src: await resolveThemeAssetReference(theme.id, theme.background.src, resolver),
+            poster: theme.background.poster
+                ? await resolveThemeAssetReference(theme.id, theme.background.poster, resolver)
+                : undefined,
+        }
+        : undefined;
+
+    const resolvedFonts = theme.fonts
+        ? await Promise.all(theme.fonts.map(async (font) => ({
+            ...font,
+            src: await resolveThemeAssetReference(theme.id, font.src, resolver),
+        })))
+        : undefined;
+
+    return {
+        ...theme,
+        background: resolvedBackground,
+        fonts: resolvedFonts,
+    };
 }
 
 function ensureStyleElement(doc: Document): HTMLStyleElement {
@@ -862,10 +1124,154 @@ export function syncThemeStyles(customThemes: ThemePackV1[], doc: Document = doc
     style.textContent = buildCustomThemeStyles(customThemes);
 }
 
+function getBackdropRoot(doc: Document): HTMLElement {
+    return doc.body || doc.documentElement;
+}
+
+function getBackdropForegroundRoot(doc: Document): HTMLElement | null {
+    const appRoot = doc.getElementById('app');
+    return appRoot instanceof HTMLElement ? appRoot : null;
+}
+
+function ensureBackdropElement(doc: Document): HTMLDivElement {
+    const existing = doc.getElementById(CUSTOM_THEME_BACKDROP_ID);
+    if (existing instanceof HTMLDivElement) {
+        return existing;
+    }
+
+    const root = getBackdropRoot(doc);
+
+    const backdrop = doc.createElement('div');
+    backdrop.id = CUSTOM_THEME_BACKDROP_ID;
+    backdrop.setAttribute('aria-hidden', 'true');
+    backdrop.style.position = 'fixed';
+    backdrop.style.inset = '0';
+    backdrop.style.overflow = 'hidden';
+    backdrop.style.pointerEvents = 'none';
+    backdrop.style.zIndex = '0';
+    backdrop.style.display = 'none';
+    root.prepend(backdrop);
+    return backdrop;
+}
+
+function syncBackdropLayering(doc: Document): void {
+    const appRoot = getBackdropForegroundRoot(doc);
+    if (!(appRoot instanceof HTMLElement)) {
+        return;
+    }
+
+    if (!appRoot.style.position) {
+        appRoot.dataset[THEME_BACKDROP_MANAGED_APP_POSITION] = 'true';
+        appRoot.style.position = 'relative';
+    }
+    if (!appRoot.style.zIndex) {
+        appRoot.dataset[THEME_BACKDROP_MANAGED_APP_Z_INDEX] = 'true';
+        appRoot.style.zIndex = '1';
+    }
+}
+
+function clearBackdropElement(doc: Document): void {
+    const existing = doc.getElementById(CUSTOM_THEME_BACKDROP_ID);
+
+    if (existing instanceof HTMLDivElement) {
+        existing.remove();
+    }
+
+    const appRoot = getBackdropForegroundRoot(doc);
+    if (!(appRoot instanceof HTMLElement)) {
+        return;
+    }
+
+    if (appRoot.dataset[THEME_BACKDROP_MANAGED_APP_POSITION] === 'true') {
+        appRoot.style.position = '';
+        delete appRoot.dataset[THEME_BACKDROP_MANAGED_APP_POSITION];
+    }
+
+    if (appRoot.dataset[THEME_BACKDROP_MANAGED_APP_Z_INDEX] === 'true') {
+        appRoot.style.zIndex = '';
+        delete appRoot.dataset[THEME_BACKDROP_MANAGED_APP_Z_INDEX];
+    }
+}
+
+function prefersReducedMotion(doc: Document): boolean {
+    return doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+}
+
+function buildBackgroundLayer(doc: Document, background: ThemeBackgroundDefinition): HTMLElement {
+    const layer = background.type === 'video' ? doc.createElement('video') : doc.createElement('div');
+    const opacity = background.opacity ?? 1;
+    const blurPx = background.blur_px ?? 0;
+    const fit = background.fit || 'cover';
+
+    layer.style.position = 'absolute';
+    layer.style.inset = '0';
+    layer.style.width = '100%';
+    layer.style.height = '100%';
+    layer.style.opacity = String(opacity);
+    layer.style.filter = blurPx > 0 ? `blur(${blurPx}px)` : 'none';
+    layer.style.transform = blurPx > 0 ? 'scale(1.03)' : 'none';
+
+    if (layer instanceof HTMLVideoElement) {
+        layer.autoplay = !prefersReducedMotion(doc);
+        layer.loop = background.loop ?? true;
+        layer.muted = background.muted ?? true;
+        layer.defaultMuted = background.muted ?? true;
+        layer.playsInline = true;
+        layer.preload = 'auto';
+        layer.setAttribute('muted', '');
+        layer.setAttribute('playsinline', '');
+        if (layer.autoplay) {
+            layer.setAttribute('autoplay', '');
+        }
+        if (layer.loop) {
+            layer.setAttribute('loop', '');
+        }
+        layer.src = background.src;
+        layer.poster = background.poster || '';
+        layer.playbackRate = background.playback_rate ?? 1;
+        layer.style.objectFit = fit;
+        layer.style.objectPosition = 'center center';
+    } else {
+        layer.style.backgroundImage = `url('${escapeCssUrl(background.src)}')`;
+        layer.style.backgroundPosition = 'center center';
+        layer.style.backgroundRepeat = 'no-repeat';
+        layer.style.backgroundSize = fit === 'fill' ? '100% 100%' : fit;
+    }
+
+    return layer;
+}
+
+function syncThemeBackdrop(theme: ThemePackV1 | null, doc: Document = document): void {
+    if (!theme?.background) {
+        clearBackdropElement(doc);
+        return;
+    }
+
+    const backdrop = ensureBackdropElement(doc);
+    backdrop.replaceChildren();
+    backdrop.style.display = 'block';
+    syncBackdropLayering(doc);
+
+    const usePosterFallback = theme.background.type === 'video' && prefersReducedMotion(doc) && theme.background.poster;
+    const background: ThemeBackgroundDefinition = usePosterFallback
+        ? { ...theme.background, type: 'image', src: theme.background.poster! }
+        : theme.background;
+
+    const layer = buildBackgroundLayer(doc, background);
+    backdrop.appendChild(layer);
+
+    if (layer instanceof HTMLVideoElement && layer.autoplay) {
+        queueMicrotask(() => {
+            void layer.play().catch(() => undefined);
+        });
+    }
+}
+
 export function applyTheme(themeId: string, customThemes: ThemePackV1[], doc: Document = document): string {
     syncThemeStyles(customThemes, doc);
     const resolvedTheme = resolveThemeSelection(themeId, customThemes);
     doc.body.dataset.theme = resolvedTheme;
+    syncThemeBackdrop(getThemeDefinition(resolvedTheme, customThemes), doc);
     return resolvedTheme;
 }
 
@@ -882,11 +1288,13 @@ export function hydrateThemeRuntimeFromCache(storage: Storage = localStorage, do
     if (isBuiltInTheme(cachedTheme)) {
         syncThemeStyles([], doc);
         doc.body.dataset.theme = cachedTheme;
+        syncThemeBackdrop(null, doc);
         return true;
     }
 
     syncThemeStyles([], doc);
     doc.body.dataset.theme = DEFAULTS.THEME;
+    syncThemeBackdrop(null, doc);
     return false;
 }
 
@@ -898,11 +1306,15 @@ export function createExportableThemePack(themeId: string, customThemes: ThemePa
 
     if (!theme.builtIn) {
         return {
-            version: 1,
+            version: theme.version,
             id: theme.id,
             name: theme.name,
             variables: { ...theme.variables },
             cssOverrides: theme.cssOverrides || '',
+            background: theme.background ? { ...theme.background } : undefined,
+            fonts: theme.fonts?.map(font => ({ ...font })),
+            typography: theme.typography ? { ...theme.typography } : undefined,
+
         };
     }
 
@@ -915,6 +1327,7 @@ export function createExportableThemePack(themeId: string, customThemes: ThemePa
     };
 }
 
-export function getThemePackFilename(themePack: ThemePackV1): string {
-    return `kechimochi_theme_${slugifyThemeName(themePack.name)}.json`;
+export function getThemePackFilename(themePack: ThemePackV1, hasAssets = false): string {
+    const extension = hasAssets ? 'zip' : 'json';
+    return `kechimochi_theme_${slugifyThemeName(themePack.name)}.${extension}`;
 }

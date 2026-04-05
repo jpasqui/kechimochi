@@ -61,6 +61,10 @@ commands.allow = [
     "list_theme_packs",
     "list_theme_pack_summaries",
     "read_theme_pack",
+    "get_theme_pack_asset_path",
+    "read_theme_pack_asset_bytes",
     "save_theme_pack",
+    "import_theme_pack",
+    "export_theme_pack",
     "delete_theme_pack"
 ]

@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use rayon::prelude::*;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -53,8 +55,16 @@ pub struct SyncSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SnapshotThemePack {
     pub content: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub assets: BTreeMap<String, String>,
     pub updated_at: String,
     pub updated_by_device_id: String,
+}
+
+#[derive(Debug, Clone)]
+struct SyncableThemePack {
+    content: String,
+    assets: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -301,18 +311,21 @@ where
     }
 
     let mut theme_packs = BTreeMap::new();
-    for (theme_id, content) in managed_theme_packs {
+    for (theme_id, syncable_theme_pack) in managed_theme_packs {
         let base_theme_pack = options
             .base_snapshot
             .and_then(|snapshot| snapshot.theme_packs.as_ref())
             .and_then(|packs| packs.get(&theme_id));
         let unchanged_from_base = base_theme_pack
-            .is_some_and(|base| base.content == content);
+            .is_some_and(|base| {
+                base.content == syncable_theme_pack.content && base.assets == syncable_theme_pack.assets
+            });
 
         theme_packs.insert(
             theme_id,
             SnapshotThemePack {
-                content,
+                content: syncable_theme_pack.content,
+                assets: syncable_theme_pack.assets,
                 updated_at: if unchanged_from_base {
                     base_theme_pack
                         .map(|base| base.updated_at.clone())
@@ -411,7 +424,18 @@ pub fn apply_snapshot_theme_packs(app_dir: &Path, snapshot: &SyncSnapshot) -> Re
     }
 
     for (theme_id, theme_pack) in theme_packs {
-        crate::save_theme_pack_logic(&themes_dir, theme_id, &theme_pack.content, None)?;
+        let asset_files = theme_pack
+            .assets
+            .iter()
+            .map(|(asset_path, encoded_bytes)| {
+                let decoded = BASE64_STANDARD
+                    .decode(encoded_bytes)
+                    .map_err(|e| format!("Failed to decode synced theme asset {asset_path}: {e}"))?;
+                Ok((Path::new(asset_path).to_path_buf(), decoded))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+
+        crate::save_theme_pack_bundle_logic(&themes_dir, theme_id, &theme_pack.content, &asset_files)?;
     }
 
     Ok(())
@@ -538,7 +562,7 @@ fn apply_snapshot_inner(
     Ok(())
 }
 
-fn load_syncable_theme_packs(app_dir: Option<&Path>) -> Result<BTreeMap<String, String>, String> {
+fn load_syncable_theme_packs(app_dir: Option<&Path>) -> Result<BTreeMap<String, SyncableThemePack>, String> {
     let Some(app_dir) = app_dir else {
         return Ok(BTreeMap::new());
     };
@@ -549,7 +573,11 @@ fn load_syncable_theme_packs(app_dir: Option<&Path>) -> Result<BTreeMap<String, 
             eprintln!("[kechimochi] Skipping invalid managed theme pack during sync snapshot build");
             continue;
         };
-        theme_packs.insert(theme_id, content);
+        let assets = crate::read_theme_pack_asset_bytes_logic(&crate::theme_packs_dir(app_dir), &theme_id)?
+            .into_iter()
+            .map(|(asset_path, bytes)| (asset_path, BASE64_STANDARD.encode(bytes)))
+            .collect::<BTreeMap<_, _>>();
+        theme_packs.insert(theme_id, SyncableThemePack { content, assets });
     }
 
     Ok(theme_packs)
@@ -1072,12 +1100,12 @@ mod tests {
         std::fs::create_dir_all(&source_dir).unwrap();
         std::fs::create_dir_all(&target_dir).unwrap();
 
-        let content = r#"{"version":1,"id":"custom:aurora-sync","name":"Aurora Sync","variables":{}}"#;
-        crate::save_theme_pack_logic(
+        let content = r#"{"version":1,"id":"custom:aurora-sync","name":"Aurora Sync","variables":{},"background":{"type":"image","src":"assets/bg.webp"}}"#;
+        crate::save_theme_pack_bundle_logic(
             &crate::theme_packs_dir(&source_dir),
             "custom:aurora-sync",
             content,
-            Some("aurora-sync.json"),
+            &[(std::path::PathBuf::from("assets/bg.webp"), b"aurora-bytes".to_vec())],
         )
         .unwrap();
 
@@ -1097,6 +1125,13 @@ mod tests {
 
         let theme_packs = snapshot.theme_packs.as_ref().unwrap();
         assert_eq!(theme_packs["custom:aurora-sync"].content, content);
+        assert_eq!(
+            theme_packs["custom:aurora-sync"].assets,
+            BTreeMap::from([(
+                "assets/bg.webp".to_string(),
+                base64::engine::general_purpose::STANDARD.encode(b"aurora-bytes"),
+            )])
+        );
         assert_eq!(theme_packs["custom:aurora-sync"].updated_at, "2026-04-02T12:34:56Z");
         assert_eq!(theme_packs["custom:aurora-sync"].updated_by_device_id, "dev_theme");
 
@@ -1112,6 +1147,10 @@ mod tests {
         assert_eq!(
             crate::read_theme_pack_logic(&crate::theme_packs_dir(&target_dir), "custom:aurora-sync").unwrap(),
             Some(content.to_string())
+        );
+        assert_eq!(
+            crate::read_theme_pack_asset_bytes_logic(&crate::theme_packs_dir(&target_dir), "custom:aurora-sync").unwrap(),
+            vec![("assets/bg.webp".to_string(), b"aurora-bytes".to_vec())]
         );
         assert_eq!(
             crate::read_theme_pack_logic(&crate::theme_packs_dir(&target_dir), "custom:stale-theme").unwrap(),

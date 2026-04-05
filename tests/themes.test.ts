@@ -3,8 +3,10 @@ import {
     applyTheme,
     buildCustomThemeStyles,
     createExportableThemePack,
+    getThemePackFilename,
     parseManagedThemePacks,
     parseStoredCustomThemes,
+    resolveThemePackAssets,
     resolveThemeSelection,
     writeThemeCache,
     validateThemePack,
@@ -80,10 +82,48 @@ describe('themes.ts', () => {
         expect(styles).toContain("body[data-theme='custom:test-theme'] .card");
     });
 
+    it('supports version 1 themes with bundled fonts, typography, and relative assets', async () => {
+        const theme = validateThemePack({
+            version: 1,
+            id: 'custom:bundle-theme',
+            name: 'Bundle Theme',
+            variables: baseVariables,
+            background: {
+                type: 'video',
+                src: 'assets/background.mp4',
+                poster: 'assets/poster.webp',
+                fit: 'contain',
+            },
+            fonts: [{
+                family: 'Reload Sans',
+                src: 'assets/reload.woff2',
+                format: 'woff2',
+                weight: '700',
+            }],
+            typography: {
+                body_family: "'Reload Sans', sans-serif",
+                heading_family: "'Reload Sans', sans-serif",
+                monospace_family: "'Reload Mono', monospace",
+            },
+        });
+
+        const resolved = await resolveThemePackAssets(theme, async (_themeId, assetPath) => `https://cdn.example/${assetPath}`);
+        const styles = buildCustomThemeStyles([resolved]);
+
+        expect(resolved.background?.src).toBe('https://cdn.example/assets/background.mp4');
+        expect(resolved.background?.poster).toBe('https://cdn.example/assets/poster.webp');
+        expect(resolved.fonts?.[0]?.src).toBe('https://cdn.example/assets/reload.woff2');
+        expect(styles).toContain("@font-face {");
+        expect(styles).toContain("font-family: 'Reload Sans'");
+        expect(styles).toContain("body[data-theme='custom:bundle-theme']{font-family:'Reload Sans', sans-serif;}");
+        expect(styles).toContain("body[data-theme='custom:bundle-theme'] h1,body[data-theme='custom:bundle-theme'] h2");
+    });
+
     it('exports built-in themes as custom packs and falls back when custom themes disappear', () => {
         const builtInExport = createExportableThemePack('light', []);
         expect(builtInExport.id).toBe('custom:light');
         expect(builtInExport.cssOverrides).toBe('');
+        expect(getThemePackFilename(builtInExport)).toBe('kechimochi_theme_light-theme-custom.json');
 
         const customThemes = parseStoredCustomThemes(JSON.stringify([{
             version: 1,
@@ -93,6 +133,8 @@ describe('themes.ts', () => {
         }]));
         const customExport = createExportableThemePack('custom:test-theme', customThemes);
         expect(customExport.cssOverrides).toBe('');
+        expect(getThemePackFilename(customExport)).toBe('kechimochi_theme_test-theme.json');
+        expect(getThemePackFilename(customExport, true)).toBe('kechimochi_theme_test-theme.zip');
         expect(resolveThemeSelection('custom:test-theme', customThemes)).toBe('custom:test-theme');
         expect(resolveThemeSelection('custom:missing', customThemes)).toBe('pastel-pink');
     });
@@ -111,6 +153,75 @@ describe('themes.ts', () => {
         expect(resolved).toBe('custom:test-theme');
         expect(document.body.dataset.theme).toBe('custom:test-theme');
         expect(document.getElementById('kechimochi-custom-theme-styles')?.textContent).toContain('border-radius: 999px;');
+    });
+
+    it('renders a themed background layer for version 1 custom themes', () => {
+        document.body.innerHTML = '<div id="app"><div id="view-container"></div></div>';
+
+        const resolved = applyTheme('custom:bundle-theme', [{
+            version: 1,
+            id: 'custom:bundle-theme',
+            name: 'Bundle Theme',
+            variables: { ...baseVariables },
+            background: {
+                type: 'image',
+                src: 'https://cdn.example/assets/bg.webp',
+                fit: 'fill',
+                opacity: 0.45,
+                blur_px: 2,
+            },
+        }]);
+
+        expect(resolved).toBe('custom:bundle-theme');
+        const backdrop = document.getElementById('kechimochi-custom-theme-backdrop') as HTMLDivElement | null;
+        expect(backdrop?.style.display).toBe('block');
+        expect(backdrop?.style.position).toBe('fixed');
+        expect(backdrop?.firstElementChild).not.toBeNull();
+        expect((backdrop?.firstElementChild as HTMLElement).style.backgroundImage).toContain('https://cdn.example/assets/bg.webp');
+        expect((backdrop?.firstElementChild as HTMLElement).style.backgroundSize).toBe('100% 100%');
+    });
+
+    it('renders autoplay video backgrounds and keeps app content above the backdrop', async () => {
+        document.body.innerHTML = '<div id="app"><div id="view-container"></div><main id="content"></main></div>';
+        const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+
+        const resolved = applyTheme('custom:video-theme', [{
+            version: 1,
+            id: 'custom:video-theme',
+            name: 'Video Theme',
+            variables: { ...baseVariables },
+            background: {
+                type: 'video',
+                src: 'https://cdn.example/assets/bg.mp4',
+                fit: 'cover',
+            },
+        }]);
+
+        await Promise.resolve();
+
+        expect(resolved).toBe('custom:video-theme');
+
+        const backdrop = document.getElementById('kechimochi-custom-theme-backdrop') as HTMLDivElement | null;
+        const video = backdrop?.firstElementChild as HTMLVideoElement | null;
+        const content = document.getElementById('content') as HTMLElement | null;
+        const appRoot = document.getElementById('app') as HTMLElement | null;
+
+        expect(backdrop?.style.display).toBe('block');
+        expect(backdrop?.style.position).toBe('fixed');
+        expect(backdrop?.style.zIndex).toBe('0');
+        expect(video).not.toBeNull();
+        expect(video?.tagName).toBe('VIDEO');
+        expect(video?.autoplay).toBe(true);
+        expect(video?.muted).toBe(true);
+        expect(video?.defaultMuted).toBe(true);
+        expect(video?.getAttribute('playsinline')).toBe('');
+        expect(video?.style.objectFit).toBe('cover');
+        expect(appRoot?.style.zIndex).toBe('1');
+        expect(content?.style.position).toBe('');
+        expect(content?.style.zIndex).toBe('');
+        expect(playSpy).toHaveBeenCalledOnce();
+
+        playSpy.mockRestore();
     });
 
     it('writes only the selected theme cache and clears the legacy custom theme payload', () => {

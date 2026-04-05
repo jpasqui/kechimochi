@@ -26,11 +26,13 @@ import {
     resolveSyncConflict,
     clearSyncBackups,
     isDesktop,
-    pickAndImportThemePack,
-    exportThemePack,
+    pickThemePackImportSelection,
+    importThemePackFromSelection,
+    pickThemePackExportSelection,
+    exportThemePackToSelection,
     listManagedThemePackSummaries,
     getManagedThemePack,
-    saveManagedThemePack,
+    resolveManagedThemeAssetUrl,
     deleteManagedThemePack,
 } from '../api';
 import {
@@ -78,6 +80,7 @@ import {
     isBuiltInTheme,
     parseThemePackText,
     removeCustomTheme,
+    resolveThemePackAssets,
     upsertCustomTheme,
     writeThemeCache,
     type ThemePackV1,
@@ -459,11 +462,49 @@ export class ProfileView extends Component<ProfileState> {
                 return fallbackTheme;
             }
 
-            return parseThemePackText(content);
+            return this.resolveThemeForRuntime(parseThemePackText(content));
         } catch (error) {
             Logger.warn('[kechimochi] Failed to load managed custom theme pack', error);
             return fallbackTheme;
         }
+    }
+
+    private async readManagedThemePack(themeId: string): Promise<ThemePackV1 | null> {
+        try {
+            const content = await getManagedThemePack(themeId);
+            return content ? parseThemePackText(content) : null;
+        } catch (error) {
+            Logger.warn('[kechimochi] Failed to read managed custom theme pack', error);
+            return null;
+        }
+    }
+
+    private async getThemePackForExport(): Promise<{ themePack: ThemePackV1; hasAssets: boolean }> {
+        if (isBuiltInTheme(this.state.theme)) {
+            return {
+                themePack: createExportableThemePack(this.state.theme, []),
+                hasAssets: false,
+            };
+        }
+
+        const [rawManagedTheme, runtimeManagedTheme, managedThemeSummaries] = await Promise.all([
+            this.readManagedThemePack(this.state.theme),
+            this.loadManagedThemePack(this.state.theme),
+            listManagedThemePackSummaries().catch(error => {
+                Logger.warn('[kechimochi] Failed to refresh managed theme pack summaries before export', error);
+                return this.state.customThemeSummaries;
+            }),
+        ]);
+
+        const themePack = rawManagedTheme
+            ?? createExportableThemePack(this.state.theme, runtimeManagedTheme ? [runtimeManagedTheme] : []);
+        const hasAssets = managedThemeSummaries.some(theme => theme.id === this.state.theme && theme.has_assets === true);
+
+        return { themePack, hasAssets };
+    }
+
+    private resolveThemeForRuntime(theme: ThemePackV1): Promise<ThemePackV1> {
+        return resolveThemePackAssets(theme, (themeId, assetPath) => resolveManagedThemeAssetUrl(themeId, assetPath));
     }
 
     render() {
@@ -1155,26 +1196,47 @@ export class ProfileView extends Component<ProfileState> {
 
         root.querySelector('#profile-select-theme')?.addEventListener('change', async (e) => {
             const theme = (e.target as HTMLSelectElement).value;
-            await this.applySelectedTheme(theme);
+            if (isBuiltInTheme(theme)) {
+                await this.applySelectedTheme(theme);
+            } else {
+                await this.withBlockingStatus(
+                    'Switching Theme Pack',
+                    'Loading theme pack. This can take a moment while assets are resolved.',
+                    () => this.applySelectedTheme(theme),
+                );
+            }
             this.render();
         });
 
         root.querySelector('#profile-btn-import-theme')?.addEventListener('click', async () => {
             try {
-                const importedFile = await pickAndImportThemePack();
-                if (!importedFile) return;
+                const importSelection = await pickThemePackImportSelection();
+                if (!importSelection) return;
 
-                const importedTheme = parseThemePackText(importedFile.content);
-                const serializedTheme = JSON.stringify(importedTheme, null, 2);
-                await saveManagedThemePack(importedTheme.id, serializedTheme, importedFile.fileName);
-                const customThemes = upsertCustomTheme(this.state.customThemes, importedTheme);
-                this.setState({
-                    customThemes,
-                    customThemeSummaries: this.mergeThemeSummary(this.state.customThemeSummaries, importedTheme),
-                });
-                await this.applySelectedTheme(importedTheme.id, importedTheme);
-                this.render();
-                await customAlert('Success', `Imported theme pack "${importedTheme.name}".`);
+                const importedThemeName = await this.withBlockingStatus(
+                    'Importing Theme Pack',
+                    'Importing theme pack. This can take a moment while assets are unpacked.',
+                    async () => {
+                        const importedFile = await importThemePackFromSelection(importSelection);
+                        const importedTheme = await this.resolveThemeForRuntime(parseThemePackText(importedFile.content));
+                        const customThemes = upsertCustomTheme(this.state.customThemes, importedTheme);
+                        const refreshedThemeSummaries = await listManagedThemePackSummaries().catch(error => {
+                            Logger.warn('[kechimochi] Failed to refresh managed theme pack summaries after import', error);
+                            return this.mergeThemeSummary(this.state.customThemeSummaries, importedTheme);
+                        });
+
+                        this.setState({
+                            customThemes,
+                            customThemeSummaries: refreshedThemeSummaries,
+                        });
+                        await this.applySelectedTheme(importedTheme.id, importedTheme);
+                        this.render();
+
+                        return importedFile.themeName;
+                    },
+                );
+
+                await customAlert('Success', `Imported theme pack "${importedThemeName}".`);
             } catch (e) {
                 await customAlert('Error', `Theme import failed: ${e}`);
             }
@@ -1182,16 +1244,25 @@ export class ProfileView extends Component<ProfileState> {
 
         root.querySelector('#profile-btn-export-theme')?.addEventListener('click', async () => {
             try {
-                const selectedCustomTheme = isBuiltInTheme(this.state.theme)
-                    ? null
-                    : await this.loadManagedThemePack(this.state.theme);
-                const themePack = createExportableThemePack(this.state.theme, selectedCustomTheme ? [selectedCustomTheme] : []);
-                const exported = await exportThemePack(
-                    getThemePackFilename(themePack),
-                    JSON.stringify(themePack, null, 2),
+                let exportedThemeName = 'Theme Pack';
+                const { themePack, hasAssets } = await this.getThemePackForExport();
+                const exportSelection = await pickThemePackExportSelection(getThemePackFilename(themePack, hasAssets));
+                if (!exportSelection) return;
+
+                const exported = await this.withBlockingStatus(
+                    'Exporting Theme Pack',
+                    'Exporting theme pack. This can take a moment while assets are bundled.',
+                    async () => {
+                        exportedThemeName = themePack.name;
+                        return exportThemePackToSelection(
+                            themePack.id,
+                            JSON.stringify(themePack, null, 2),
+                            exportSelection,
+                        );
+                    },
                 );
                 if (exported) {
-                    await customAlert('Success', `Exported theme pack "${themePack.name}".`);
+                    await customAlert('Success', `Exported theme pack "${exportedThemeName}".`);
                 }
             } catch (e) {
                 await customAlert('Error', `Theme export failed: ${e}`);

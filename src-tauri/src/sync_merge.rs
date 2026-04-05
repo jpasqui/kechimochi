@@ -1820,6 +1820,7 @@ mod tests {
             "custom:aurora".to_string(),
             SnapshotThemePack {
                 content: r#"{"version":1,"id":"custom:aurora","name":"Aurora","variables":{}}"#.to_string(),
+                assets: BTreeMap::new(),
                 updated_at: "2026-04-01T00:00:00Z".to_string(),
                 updated_by_device_id: "dev_base".to_string(),
             },
@@ -1829,6 +1830,7 @@ mod tests {
             "custom:aurora".to_string(),
             SnapshotThemePack {
                 content: r#"{"version":1,"id":"custom:aurora","name":"Aurora Remote","variables":{}}"#.to_string(),
+                assets: BTreeMap::new(),
                 updated_at: "2026-04-03T00:00:00Z".to_string(),
                 updated_by_device_id: "dev_remote".to_string(),
             },
@@ -1853,6 +1855,7 @@ mod tests {
             "custom:aurora".to_string(),
             SnapshotThemePack {
                 content: r#"{"version":1,"id":"custom:aurora","name":"Aurora","variables":{}}"#.to_string(),
+                assets: BTreeMap::new(),
                 updated_at: "2026-04-02T00:00:00Z".to_string(),
                 updated_by_device_id: "dev_local".to_string(),
             },

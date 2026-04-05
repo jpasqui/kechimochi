@@ -165,15 +165,27 @@ describe('WebServices', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('imports a picked theme pack without hitting the backend', async () => {
+    it('imports a picked theme pack through the managed theme import endpoint', async () => {
         const file = new File(['{"name":"Theme"}'], 'theme.json', { type: 'application/json' });
         mockFilePicker(file);
+        fetchMock.mockResolvedValue(okJson({
+            themeId: 'custom:test-theme',
+            themeName: 'Test Theme',
+            content: '{"name":"Theme"}',
+            fileName: 'theme.json',
+        }));
 
-        await expect(services.pickAndImportThemePack()).resolves.toEqual({
+        await expect(services.pickThemePackImportSelection()).resolves.toEqual({ kind: 'web', file });
+        await expect(services.importThemePackFromSelection({ kind: 'web', file })).resolves.toEqual({
+            themeId: 'custom:test-theme',
+            themeName: 'Test Theme',
             content: '{"name":"Theme"}',
             fileName: 'theme.json',
         });
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledWith('/api/themes/import', expect.objectContaining({
+            method: 'POST',
+            body: expect.any(FormData),
+        }));
     });
 
     it('sends preferred theme filenames to the managed theme endpoint', async () => {
@@ -203,19 +215,43 @@ describe('WebServices', () => {
         expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/themes/custom%3Atest-theme');
     });
 
-    it('exports theme packs by triggering a JSON download', async () => {
+    it('resolves managed theme asset URLs through the theme asset endpoint', async () => {
+        await expect(services.resolveManagedThemeAssetUrl('custom:test-theme', 'assets\\bg video.mp4')).resolves.toBe(
+            '/api/themes/custom%3Atest-theme/assets/assets/bg%20video.mp4'
+        );
+        await expect(services.resolveManagedThemeAssetUrl('custom:test-theme', '   ')).resolves.toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('exports theme packs by triggering a zip download from the backend', async () => {
         const anchorClick = vi.fn();
+        const blob = new Blob(['zip']);
         vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
             const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName);
             if (el instanceof HTMLAnchorElement) el.click = anchorClick;
             return el;
         });
+        fetchMock.mockResolvedValue({
+            ok: true,
+            blob: vi.fn().mockResolvedValue(blob),
+            text: vi.fn(),
+        });
 
-        await expect(services.exportThemePack('theme.json', '{"name":"Theme"}')).resolves.toBe(true);
+        await expect(services.pickThemePackExportSelection('theme.zip')).resolves.toEqual({ kind: 'web', fileName: 'theme.zip' });
+        await expect(
+            services.exportThemePackToSelection('custom:test-theme', '{"name":"Theme"}', { kind: 'web', fileName: 'theme.zip' })
+        ).resolves.toBe(true);
 
-        expect(URL.createObjectURL).toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledWith('/api/themes/export', expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({
+                themeId: 'custom:test-theme',
+                content: '{"name":"Theme"}',
+            }),
+        }));
+        expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
         expect(anchorClick).toHaveBeenCalled();
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test');
     });
 
     it('loads cover images from API filenames and handles blank refs', async () => {

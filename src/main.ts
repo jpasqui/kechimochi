@@ -4,8 +4,10 @@ import { ProfileView } from './components/profile';
 import { TimelineView } from './components/timeline';
 import {
     initializeUserDb,
+    getManagedThemePack,
     getUsername,
     getSetting,
+    resolveManagedThemeAssetUrl,
     setSetting,
     getProfilePicture,
     getStartupError,
@@ -33,7 +35,8 @@ import {
     showNoCloudProfilesFoundAlert,
     stringifySyncEnablementError,
 } from './sync_enablement';
-import { applyTheme, parseManagedThemePacks, writeThemeCache } from './themes';
+import { applyTheme, parseThemePackText, resolveThemePackAssets, writeThemeCache } from './themes';
+import type { ThemePackV1 } from './themes';
 
 // Support global date mocking for E2E tests
 let mockDateStr: string | null = null;
@@ -391,21 +394,31 @@ export class App {
         }
     }
 
-    private async loadTheme() {
-        const services = getServices();
-        const managedThemeContentsPromise = typeof services.listManagedThemePacks === 'function'
-            ? Promise.resolve(services.listManagedThemePacks()).catch(error => {
-                Logger.warn('[kechimochi] Failed to load managed theme packs', error);
-                return null;
-            })
-            : Promise.resolve<string[] | null>(null);
-
-        const [storedTheme, managedThemeContents] = await Promise.all([
-            getSetting(SETTING_KEYS.THEME),
-            managedThemeContentsPromise,
-        ]);
-        const customThemes = managedThemeContents ? parseManagedThemePacks(managedThemeContents) : [];
+    private async loadTheme(): Promise<void> {
+        const storedTheme = await getSetting(SETTING_KEYS.THEME);
         const requestedTheme = storedTheme || DEFAULTS.THEME;
+        let customThemes: ThemePackV1[] = [];
+
+        if (!requestedTheme || requestedTheme === DEFAULTS.THEME) {
+            customThemes = [];
+        } else if (!requestedTheme.includes(':')) {
+            customThemes = [];
+        } else {
+            try {
+                const managedThemeContent = await getManagedThemePack(requestedTheme);
+                if (managedThemeContent) {
+                    const parsedTheme = parseThemePackText(managedThemeContent);
+                    const resolvedTheme = await resolveThemePackAssets(
+                        parsedTheme,
+                        (themeId, assetPath) => resolveManagedThemeAssetUrl(themeId, assetPath),
+                    );
+                    customThemes = [resolvedTheme];
+                }
+            } catch (error) {
+                Logger.warn('[kechimochi] Failed to load managed theme pack', error);
+            }
+        }
+
         const effectiveTheme = applyTheme(requestedTheme, customThemes);
 
         writeThemeCache(effectiveTheme, customThemes);

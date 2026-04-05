@@ -1,15 +1,15 @@
 # Custom Themes
 
-Kechimochi supports managed custom theme packs. A theme pack is a JSON file that defines a color palette, chart colors, heatmap tuning, and optional scoped CSS overrides.
+Kechimochi supports managed custom theme packs. A theme pack defines a color palette, chart colors, heatmap tuning, optional background media, optional typography, and optional scoped CSS overrides.
 
 Imported theme packs are copied into Kechimochi's managed storage. The original file is not watched after import.
 
 ## Use a Theme Pack
 
 1. Open the Profile tab.
-2. In the Appearance card, choose Import Theme Pack to add a JSON file.
+2. In the Appearance card, choose Import Theme Pack to add a JSON or ZIP pack.
 3. Select the imported theme from the Theme dropdown.
-4. Use Export Theme Pack to save the currently selected built-in theme or custom theme as a reusable JSON file.
+4. Use Export Theme Pack to save the currently selected built-in theme or custom theme as a reusable ZIP pack.
 5. Use Delete Theme to remove the selected custom pack from managed storage.
 
 Notes:
@@ -51,6 +51,18 @@ Notes:
     "chart-series-4": "#ffd166",
     "chart-series-5": "#ff6b81"
   },
+  "background": {
+    "type": "video",
+    "src": "assets/background.mp4",
+    "poster": "assets/poster.webp",
+    "fit": "cover",
+    "opacity": 0.72,
+    "muted": true,
+    "loop": true
+  },
+  "typography": {
+    "heading_family": "'Bahnschrift SemiCondensed', 'Arial Narrow', sans-serif"
+  },
   "cssOverrides": ".btn { border-radius: 999px; }"
 }
 ```
@@ -61,6 +73,9 @@ Notes:
 - `id`: Stable unique identifier. Use letters, numbers, colons, underscores, and hyphens. Prefixing with `custom:` is recommended.
 - `name`: Display name shown in the UI.
 - `variables`: Complete theme token set.
+- `background`: Optional image or video background definition.
+- `fonts`: Optional bundled or remote font-face definitions.
+- `typography`: Optional body, heading, and monospace font families.
 - `cssOverrides`: Optional CSS applied only while that theme is active.
 
 ## Variable Reference
@@ -109,6 +124,22 @@ Example:
   }
 }
 ```
+
+## Optional Background And Typography Fields
+
+- `background.type`: `image` or `video`.
+- `background.src`: Absolute URL, data URI, or safe relative asset path inside the pack.
+- `background.poster`: Optional fallback poster for video backgrounds.
+- `background.fit`: `cover`, `contain`, or `fill`.
+- `background.opacity`: Optional overlay opacity from `0` to `1`.
+- `background.blur_px`: Optional blur applied to the background media.
+- `background.playback_rate`: Optional video speed multiplier.
+- `background.loop`: Optional video looping flag.
+- `background.muted`: Optional video muted flag.
+- `fonts`: Array of `family`, `src`, and optional `weight`, `style`, `format` entries.
+- `typography.body_family`: Optional font-family string for body text.
+- `typography.heading_family`: Optional font-family string for headings.
+- `typography.monospace_family`: Optional font-family string for code-like text.
 
 ## Recommended Workflow
 

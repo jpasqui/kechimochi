@@ -29,6 +29,7 @@ export type {
 } from './types';
 
 export type { ImportedThemePackFile } from './services';
+export type { ThemePackExportSelection, ThemePackImportSelection } from './services';
 
 import type {
   Media,
@@ -170,8 +171,12 @@ export function importFullBackup(): Promise<string | null> {
   return getServices().pickAndImportFullBackup();
 }
 
-export function pickAndImportThemePack(): Promise<import('./services').ImportedThemePackFile | null> {
-  return getServices().pickAndImportThemePack();
+export function pickThemePackImportSelection(): Promise<import('./services').ThemePackImportSelection | null> {
+  return getServices().pickThemePackImportSelection();
+}
+
+export function importThemePackFromSelection(selection: import('./services').ThemePackImportSelection): Promise<import('./services').ImportedThemePackFile> {
+  return getServices().importThemePackFromSelection(selection);
 }
 
 export function listManagedThemePackSummaries(): Promise<ManagedThemePackSummary[]> {
@@ -180,6 +185,10 @@ export function listManagedThemePackSummaries(): Promise<ManagedThemePackSummary
 
 export function getManagedThemePack(themeId: string): Promise<string | null> {
   return getServices().getManagedThemePack(themeId);
+}
+
+export function resolveManagedThemeAssetUrl(themeId: string, assetPath: string): Promise<string | null> {
+  return getServices().resolveManagedThemeAssetUrl(themeId, assetPath);
 }
 
 export function listManagedThemePacks(): Promise<string[]> {
@@ -194,6 +203,10 @@ export function deleteManagedThemePack(themeId: string): Promise<void> {
   return getServices().deleteManagedThemePack(themeId);
 }
 
-export function exportThemePack(defaultFileName: string, content: string): Promise<boolean> {
-  return getServices().exportThemePack(defaultFileName, content);
+export function pickThemePackExportSelection(defaultFileName: string): Promise<import('./services').ThemePackExportSelection | null> {
+  return getServices().pickThemePackExportSelection(defaultFileName);
+}
+
+export function exportThemePackToSelection(themeId: string, content: string, selection: import('./services').ThemePackExportSelection): Promise<boolean> {
+  return getServices().exportThemePackToSelection(themeId, content, selection);
 }
