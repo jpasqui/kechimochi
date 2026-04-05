@@ -1,3 +1,4 @@
+pub mod cli_env;
 pub mod app_file_io;
 pub mod backup;
 pub mod csv_import;
